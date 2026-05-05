@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #f0f0f0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.6);
+}
+
+/* Safe area for mobile */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Card hover glow */
+.card-glow:hover {
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.15);
+}
+
+/* Animated gradient border */
+@keyframes borderRotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animated-border {
+  background: linear-gradient(-45deg, #8B5CF6, #EC4899, #8B5CF6, #EC4899);
+  background-size: 400% 400%;
+  animation: borderRotate 4s ease infinite;
+}
+
+/* Pulse animation for live elements */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.live-pulse {
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+/* Prose styles for blog posts */
+.prose-rival h1 { font-size: 2rem; font-weight: 800; color: white; margin: 1.5rem 0 1rem; }
+.prose-rival h2 { font-size: 1.5rem; font-weight: 700; color: white; margin: 1.5rem 0 0.75rem; }
+.prose-rival h3 { font-size: 1.25rem; font-weight: 600; color: rgba(255,255,255,0.9); margin: 1.25rem 0 0.5rem; }
+.prose-rival p { color: rgba(255,255,255,0.7); line-height: 1.8; margin: 0.75rem 0; }
+.prose-rival ul, .prose-rival ol { color: rgba(255,255,255,0.7); padding-left: 1.5rem; margin: 0.75rem 0; }
+.prose-rival li { margin: 0.5rem 0; line-height: 1.7; }
+.prose-rival strong { color: white; }
+.prose-rival a { color: #8B5CF6; text-decoration: underline; }
+.prose-rival blockquote { border-left: 3px solid #8B5CF6; padding-left: 1rem; color: rgba(255,255,255,0.6); font-style: italic; }
+
+/* Game canvas */
+.game-area {
+  background: #0d0d0d;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px;
+}
