@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
 
   const today = new Date().toISOString().split('T')[0];
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 2; i++) {
     const niche = NICHES[i % NICHES.length];
     const voiceId = VOICES[i % VOICES.length];
     try {
