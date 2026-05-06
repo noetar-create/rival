@@ -1,6 +1,34 @@
 import { NextRequest } from 'next/server';
-import { getVideos, createVideo } from '@/lib/db';
+import { getVideos, createVideo, createVideoFlagged } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import Anthropic from '@anthropic-ai/sdk';
+
+async function moderateContent(title: string, description: string): Promise<{ safe: boolean; reason: string }> {
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: `You are a content moderator. Evaluate if this video content violates community rules.
+
+Rules violations: hate speech, nudity/explicit sexual content, graphic violence, spam, harassment, illegal content, or bot-generated manipulation.
+
+Title: "${title}"
+Description: "${description || ''}"
+
+Respond with JSON only: {"safe": true/false, "reason": "brief explanation"}`
+      }]
+    });
+    const text = response.content[0].type === 'text' ? response.content[0].text : '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return { safe: true, reason: 'OK' };
+    return JSON.parse(match[0]) as { safe: boolean; reason: string };
+  } catch {
+    return { safe: true, reason: 'Moderation unavailable' };
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -14,9 +42,23 @@ export async function POST(request: NextRequest) {
   const user = await getAuthUser();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { title, description, file_url, thumbnail_url } = await request.json();
+  const { title, description, file_url, thumbnail_url, hashtags } = await request.json();
   if (!title) return Response.json({ error: 'Title required' }, { status: 400 });
 
-  const result = createVideo(user.userId, title, description || '', file_url || '', thumbnail_url || '');
-  return Response.json({ success: true, id: result.lastInsertRowid }, { status: 201 });
+  // Run moderation check
+  const modResult = await moderateContent(title, description || '');
+
+  let result;
+  if (!modResult.safe) {
+    result = createVideoFlagged(user.userId, title, description || '', file_url || '', thumbnail_url || '', hashtags || null);
+    return Response.json({
+      success: true,
+      id: result.lastInsertRowid,
+      flagged: true,
+      message: 'Your video is pending review.',
+    }, { status: 201 });
+  }
+
+  result = createVideo(user.userId, title, description || '', file_url || '', thumbnail_url || '', hashtags || null);
+  return Response.json({ success: true, id: result.lastInsertRowid, flagged: false }, { status: 201 });
 }

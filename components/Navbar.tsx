@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import NotificationBell from './NotificationBell';
 
 const navItems = [
   { href: '/', label: 'Home', icon: '🏠' },
@@ -14,6 +15,9 @@ const navItems = [
   { href: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
   { href: '/upload', label: 'Upload', icon: '⬆️' },
   { href: '/blog', label: 'Blog', icon: '📝' },
+  { href: '/rules', label: 'Rules', icon: '📋' },
+  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { href: '/saved', label: 'Saved', icon: '🔖' },
 ];
 
 export default function Navbar() {
@@ -22,15 +26,16 @@ export default function Navbar() {
   return (
     <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 bg-[#111111] border-r border-white/5 z-40">
       {/* Logo */}
-      <div className="p-6 pb-4">
+      <div className="p-6 pb-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent tracking-tight">
             RIVAL
           </span>
           <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-semibold">BETA</span>
         </Link>
-        <p className="text-xs text-white/40 mt-1">Compete. Win. Repeat.</p>
+        <NotificationBell />
       </div>
+      <p className="text-xs text-white/40 px-6 -mt-2 mb-2">Compete. Win. Repeat.</p>
 
       {/* Nav */}
       <nav className="flex-1 px-3 overflow-y-auto">

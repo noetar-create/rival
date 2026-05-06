@@ -5,7 +5,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-import { createVideo, createUser, getUserByEmail } from '@/lib/db';
+import { createVideo, createUser, getUserByEmail, awardVerifiedBadgesToTopThree } from '@/lib/db';
 
 const execAsync = promisify(exec);
 
@@ -127,12 +127,20 @@ export async function GET(req: NextRequest) {
       await createVideoFile(audioPath, title, videoPath, niche.name);
 
       const fileUrl = `/uploads/videos/${baseName}.mp4`;
-      createVideo(systemUser.id, title, `#${niche.name} #rival #compete`, fileUrl, '');
+      const hashtags = `#${niche.name} #rival #compete`;
+      createVideo(systemUser.id, title, hashtags, fileUrl, '', hashtags);
 
       results.push({ title, niche: niche.name, url: fileUrl });
     } catch (err) {
       results.push({ error: String(err), niche: niche.name });
     }
+  }
+
+  // Award verified badges to last week's top 3
+  try {
+    awardVerifiedBadgesToTopThree();
+  } catch (err) {
+    console.error('Badge award error:', err);
   }
 
   return NextResponse.json({ generated: results.length, results, date: today });

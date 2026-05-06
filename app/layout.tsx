@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import MobileNav from "@/components/MobileNav";
+import WelcomeModal from "@/components/WelcomeModal";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -69,6 +70,9 @@ export default function RootLayout({
 
         {/* Mobile bottom nav */}
         <MobileNav />
+
+        {/* Welcome modal — only shows on first visit */}
+        <WelcomeModal />
       </body>
     </html>
   );

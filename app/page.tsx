@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getVideos } from '@/lib/db';
 import VideoCard from '@/components/VideoCard';
+import VideoFeed from '@/components/VideoFeed';
 
 export const metadata: Metadata = {
   title: 'Rival — Compete. Win. Repeat.',
@@ -12,12 +13,12 @@ export const metadata: Metadata = {
 };
 
 const mockVideos = [
-  { id: 1, user_id: 1, title: "My reaction to winning the weekly leaderboard 🏆", description: "Three weeks in a row!", username: "champ_carlos", likes: 2847, views: 41200, thumbnail_url: null, created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
-  { id: 2, user_id: 2, title: "The emoji decode game broke my brain 🧠", description: "Level 7 was impossible", username: "emoji_queen", likes: 1923, views: 28500, thumbnail_url: null, created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
-  { id: 3, user_id: 3, title: "I typed 87 WPM on my phone. No big deal 😎", description: "Mobile typing speedrun", username: "fast_fingers99", likes: 4201, views: 67800, thumbnail_url: null, created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString() },
-  { id: 4, user_id: 4, title: "Hot take contest winner reveals ☕", description: "You won't believe what I said", username: "opinionsonly", likes: 891, views: 15300, thumbnail_url: null, created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() },
-  { id: 5, user_id: 5, title: "Caption contest strategy that never fails", description: "The second-layer joke always wins", username: "caption_king", likes: 3112, views: 52000, thumbnail_url: null, created_at: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString() },
-  { id: 6, user_id: 6, title: "Reaction time 187ms — new Rival record?!", description: "Training paid off", username: "reflex_master", likes: 6720, views: 98400, thumbnail_url: null, created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+  { id: 1, user_id: 1, title: "My reaction to winning the weekly leaderboard 🏆", description: "Three weeks in a row! #rival #compete #leaderboard", username: "champ_carlos", likes: 2847, views: 41200, download_count: 120, hashtags: "#rival #compete #leaderboard", file_url: null, thumbnail_url: null, verified: 1, created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
+  { id: 2, user_id: 2, title: "The emoji decode game broke my brain 🧠", description: "Level 7 was impossible #games #rival", username: "emoji_queen", likes: 1923, views: 28500, download_count: 55, hashtags: "#games #rival", file_url: null, thumbnail_url: null, verified: 0, created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
+  { id: 3, user_id: 3, title: "I typed 87 WPM on my phone. No big deal 😎", description: "Mobile typing speedrun #speed #games", username: "fast_fingers99", likes: 4201, views: 67800, download_count: 230, hashtags: "#speed #games", file_url: null, thumbnail_url: null, verified: 1, created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString() },
+  { id: 4, user_id: 4, title: "Hot take contest winner reveals ☕", description: "You won't believe what I said #hottakes #rival", username: "opinionsonly", likes: 891, views: 15300, download_count: 20, hashtags: "#hottakes #rival", file_url: null, thumbnail_url: null, verified: 0, created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() },
+  { id: 5, user_id: 5, title: "Caption contest strategy that never fails", description: "The second-layer joke always wins #caption", username: "caption_king", likes: 3112, views: 52000, download_count: 95, hashtags: "#caption #rival", file_url: null, thumbnail_url: null, verified: 0, created_at: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString() },
+  { id: 6, user_id: 6, title: "Reaction time 187ms — new Rival record?!", description: "Training paid off #reflex #games", username: "reflex_master", likes: 6720, views: 98400, download_count: 410, hashtags: "#reflex #games", file_url: null, thumbnail_url: null, verified: 1, created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
 ];
 
 const jsonLd = {
@@ -34,11 +35,11 @@ const jsonLd = {
 };
 
 export default function HomePage() {
-  let dbVideos: typeof mockVideos = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let dbVideos: any[] = [];
   try {
     const fetched = getVideos(20, 0);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dbVideos = fetched as any;
+    dbVideos = fetched as typeof mockVideos;
   } catch {}
   const videos = dbVideos.length > 0 ? dbVideos : mockVideos;
 
@@ -48,6 +49,19 @@ export default function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
+      {/* TikTok-style vertical video feed */}
+      <VideoFeed videos={videos} />
+
+      {/* Section divider */}
+      <div className="relative py-6 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center px-8">
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
+        </div>
+        <div className="relative bg-[#0a0a0a] px-6">
+          <span className="text-white/30 text-sm font-medium tracking-widest uppercase">Explore Rival</span>
+        </div>
+      </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Hero */}
@@ -122,7 +136,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Video Feed */}
+        {/* Video Feed grid */}
         <div>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-xl font-bold text-white">🔥 Trending Videos</h2>

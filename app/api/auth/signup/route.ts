@@ -5,7 +5,7 @@ import { signToken, setCookieHeader } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, email, password } = await request.json();
+    const { username, email, password, referral_code } = await request.json();
 
     if (!username || !email || !password) {
       return Response.json({ error: 'All fields required' }, { status: 400 });
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = createUser(username, email, passwordHash);
+    const result = createUser(username, email, passwordHash, referral_code || undefined);
     const userId = result.lastInsertRowid as number;
 
     const token = signToken({ userId, username, email });

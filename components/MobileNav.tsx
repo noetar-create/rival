@@ -8,7 +8,7 @@ const mobileItems = [
   { href: '/games', label: 'Games', icon: '🎮' },
   { href: '/upload', label: 'Upload', icon: '⬆️' },
   { href: '/leaderboard', label: 'Ranks', icon: '🏆' },
-  { href: '/login', label: 'Profile', icon: '👤' },
+  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
 ];
 
 export default function MobileNav() {

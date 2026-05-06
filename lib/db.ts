@@ -25,6 +25,8 @@ function initSchema() {
       password_hash TEXT NOT NULL,
       avatar_url TEXT,
       total_points INTEGER DEFAULT 0,
+      verified INTEGER DEFAULT 0,
+      referral_code TEXT UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -37,6 +39,10 @@ function initSchema() {
       thumbnail_url TEXT,
       views INTEGER DEFAULT 0,
       likes INTEGER DEFAULT 0,
+      download_count INTEGER DEFAULT 0,
+      hashtags TEXT,
+      flagged INTEGER DEFAULT 0,
+      moderated INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
@@ -49,6 +55,36 @@ function initSchema() {
       UNIQUE(video_id, user_id),
       FOREIGN KEY (video_id) REFERENCES videos(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS bookmarks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      video_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, video_id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (video_id) REFERENCES videos(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS referrals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      referrer_id INTEGER NOT NULL,
+      referred_id INTEGER NOT NULL,
+      points_awarded INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (referrer_id) REFERENCES users(id),
+      FOREIGN KEY (referred_id) REFERENCES users(id)
     );
 
     CREATE TABLE IF NOT EXISTS game_results (
@@ -115,15 +151,87 @@ function initSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // Run migrations for existing databases
+  runMigrations(database);
+}
+
+function runMigrations(database: Database.Database) {
+  // Add new columns to existing tables if they don't exist
+  const migrations = [
+    "ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN referral_code TEXT",
+    "ALTER TABLE videos ADD COLUMN download_count INTEGER DEFAULT 0",
+    "ALTER TABLE videos ADD COLUMN hashtags TEXT",
+    "ALTER TABLE videos ADD COLUMN flagged INTEGER DEFAULT 0",
+    "ALTER TABLE videos ADD COLUMN moderated INTEGER DEFAULT 0",
+  ];
+
+  for (const migration of migrations) {
+    try {
+      database.exec(migration);
+    } catch {
+      // Column already exists — ignore
+    }
+  }
+}
+
+// ---- Helpers ----
+export function getWeekStart(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now.setDate(diff));
+  return monday.toISOString().split('T')[0];
+}
+
+function generateReferralCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
 }
 
 // ---- Users ----
-export function createUser(username: string, email: string, passwordHash: string) {
+export function createUser(username: string, email: string, passwordHash: string, referralCode?: string) {
   const database = getDb();
+  // Generate unique referral code
+  let code = generateReferralCode();
+  // Retry if collision
+  for (let i = 0; i < 10; i++) {
+    const existing = database.prepare('SELECT id FROM users WHERE referral_code = ?').get(code);
+    if (!existing) break;
+    code = generateReferralCode();
+  }
+
+  if (referralCode) {
+    // Find referrer
+    const referrer = database.prepare('SELECT * FROM users WHERE referral_code = ?').get(referralCode) as User | undefined;
+    if (referrer) {
+      const stmt = database.prepare(
+        'INSERT INTO users (username, email, password_hash, referral_code) VALUES (?, ?, ?, ?)'
+      );
+      const result = stmt.run(username, email, passwordHash, code);
+      const newUserId = result.lastInsertRowid as number;
+      // Award +5 points to both
+      addPoints(referrer.id, 5);
+      addPoints(newUserId, 5);
+      // Record referral
+      database.prepare(
+        'INSERT INTO referrals (referrer_id, referred_id, points_awarded) VALUES (?, ?, ?)'
+      ).run(referrer.id, newUserId, 5);
+      // Notify referrer
+      createNotification(referrer.id, 'video_like', `${username} joined Rival using your referral link! You both earned +5 points.`);
+      return result;
+    }
+  }
+
   const stmt = database.prepare(
-    'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)'
+    'INSERT INTO users (username, email, password_hash, referral_code) VALUES (?, ?, ?, ?)'
   );
-  return stmt.run(username, email, passwordHash);
+  return stmt.run(username, email, passwordHash, code);
 }
 
 export function getUserByEmail(email: string) {
@@ -141,10 +249,19 @@ export function getUserByUsername(username: string) {
   return database.prepare('SELECT * FROM users WHERE username = ?').get(username) as User | undefined;
 }
 
+export function getUserByReferralCode(code: string) {
+  const database = getDb();
+  return database.prepare('SELECT * FROM users WHERE referral_code = ?').get(code) as User | undefined;
+}
+
+export function setUserVerified(userId: number, verified: boolean) {
+  const database = getDb();
+  database.prepare('UPDATE users SET verified = ? WHERE id = ?').run(verified ? 1 : 0, userId);
+}
+
 export function addPoints(userId: number, points: number) {
   const database = getDb();
   database.prepare('UPDATE users SET total_points = total_points + ? WHERE id = ?').run(points, userId);
-  const today = new Date().toISOString().split('T')[0];
   const weekStart = getWeekStart();
   database.prepare(`
     INSERT INTO weekly_points (user_id, week_start, points) VALUES (?, ?, ?)
@@ -152,23 +269,99 @@ export function addPoints(userId: number, points: number) {
   `).run(userId, weekStart, points, points);
 }
 
+export function getReferralStats(userId: number) {
+  const database = getDb();
+  const referrals = database.prepare(`
+    SELECT r.*, u.username as referred_username
+    FROM referrals r
+    JOIN users u ON r.referred_id = u.id
+    WHERE r.referrer_id = ?
+    ORDER BY r.created_at DESC
+  `).all(userId) as ReferralWithUser[];
+  const totalPoints = referrals.reduce((sum, r) => sum + r.points_awarded, 0);
+  return { referrals, totalPoints, count: referrals.length };
+}
+
 // ---- Videos ----
 export function getVideos(limit = 20, offset = 0) {
   const database = getDb();
   return database.prepare(`
-    SELECT v.*, u.username, u.avatar_url
+    SELECT v.*, u.username, u.avatar_url, u.verified
     FROM videos v
     JOIN users u ON v.user_id = u.id
+    WHERE v.flagged = 0
     ORDER BY v.created_at DESC
     LIMIT ? OFFSET ?
   `).all(limit, offset) as VideoWithUser[];
 }
 
-export function createVideo(userId: number, title: string, description: string, fileUrl: string, thumbnailUrl: string) {
+export function getVideosByHashtag(tag: string, limit = 20, offset = 0) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v
+    JOIN users u ON v.user_id = u.id
+    WHERE v.flagged = 0 AND (v.hashtags LIKE ? OR v.description LIKE ?)
+    ORDER BY v.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(`%#${tag}%`, `%#${tag}%`, limit, offset) as VideoWithUser[];
+}
+
+export function getVideoById(id: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v
+    JOIN users u ON v.user_id = u.id
+    WHERE v.id = ?
+  `).get(id) as VideoWithUser | undefined;
+}
+
+export function getUserVideos(userId: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT * FROM videos WHERE user_id = ? ORDER BY created_at DESC
+  `).all(userId) as VideoWithUser[];
+}
+
+export function createVideo(userId: number, title: string, description: string, fileUrl: string, thumbnailUrl: string, hashtags?: string) {
   const database = getDb();
   return database.prepare(
-    'INSERT INTO videos (user_id, title, description, file_url, thumbnail_url) VALUES (?, ?, ?, ?, ?)'
-  ).run(userId, title, description, fileUrl, thumbnailUrl);
+    'INSERT INTO videos (user_id, title, description, file_url, thumbnail_url, hashtags) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(userId, title, description, fileUrl, thumbnailUrl, hashtags || null);
+}
+
+export function createVideoFlagged(userId: number, title: string, description: string, fileUrl: string, thumbnailUrl: string, hashtags?: string) {
+  const database = getDb();
+  return database.prepare(
+    'INSERT INTO videos (user_id, title, description, file_url, thumbnail_url, hashtags, flagged) VALUES (?, ?, ?, ?, ?, ?, 1)'
+  ).run(userId, title, description, fileUrl, thumbnailUrl, hashtags || null);
+}
+
+export function approveVideo(videoId: number) {
+  const database = getDb();
+  database.prepare('UPDATE videos SET flagged = 0, moderated = 1 WHERE id = ?').run(videoId);
+}
+
+export function rejectVideo(videoId: number) {
+  const database = getDb();
+  database.prepare('UPDATE videos SET moderated = 1 WHERE id = ?').run(videoId);
+}
+
+export function getFlaggedVideos() {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username
+    FROM videos v
+    JOIN users u ON v.user_id = u.id
+    WHERE v.flagged = 1 AND v.moderated = 0
+    ORDER BY v.created_at DESC
+  `).all() as VideoWithUser[];
+}
+
+export function incrementDownloads(videoId: number) {
+  const database = getDb();
+  database.prepare('UPDATE videos SET download_count = download_count + 1 WHERE id = ?').run(videoId);
 }
 
 export function likeVideo(videoId: number, userId: number) {
@@ -176,12 +369,86 @@ export function likeVideo(videoId: number, userId: number) {
   try {
     database.prepare('INSERT INTO video_likes (video_id, user_id) VALUES (?, ?)').run(videoId, userId);
     database.prepare('UPDATE videos SET likes = likes + 1 WHERE id = ?').run(videoId);
+    // Notify video owner
+    const video = database.prepare('SELECT user_id, title FROM videos WHERE id = ?').get(videoId) as { user_id: number; title: string } | undefined;
+    if (video && video.user_id !== userId) {
+      const liker = database.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
+      if (liker) {
+        createNotification(video.user_id, 'video_like', `${liker.username} liked your video "${video.title}"`);
+      }
+    }
     return { liked: true };
   } catch {
     database.prepare('DELETE FROM video_likes WHERE video_id = ? AND user_id = ?').run(videoId, userId);
     database.prepare('UPDATE videos SET likes = likes - 1 WHERE id = ?').run(videoId);
     return { liked: false };
   }
+}
+
+// ---- Bookmarks ----
+export function toggleBookmark(videoId: number, userId: number) {
+  const database = getDb();
+  const existing = database.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND video_id = ?').get(userId, videoId);
+  if (existing) {
+    database.prepare('DELETE FROM bookmarks WHERE user_id = ? AND video_id = ?').run(userId, videoId);
+    return { bookmarked: false };
+  } else {
+    database.prepare('INSERT INTO bookmarks (user_id, video_id) VALUES (?, ?)').run(userId, videoId);
+    return { bookmarked: true };
+  }
+}
+
+export function getUserBookmarks(userId: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM bookmarks b
+    JOIN videos v ON b.video_id = v.id
+    JOIN users u ON v.user_id = u.id
+    WHERE b.user_id = ?
+    ORDER BY b.created_at DESC
+  `).all(userId) as VideoWithUser[];
+}
+
+export function isBookmarked(videoId: number, userId: number): boolean {
+  const database = getDb();
+  const row = database.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND video_id = ?').get(userId, videoId);
+  return !!row;
+}
+
+// ---- Notifications ----
+export function createNotification(userId: number, type: string, message: string) {
+  const database = getDb();
+  try {
+    database.prepare(
+      'INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)'
+    ).run(userId, type, message);
+  } catch {
+    // Silently fail — notifications are non-critical
+  }
+}
+
+export function getUserNotifications(userId: number) {
+  const database = getDb();
+  return database.prepare(
+    'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50'
+  ).all(userId) as Notification[];
+}
+
+export function getUnreadNotificationCount(userId: number): number {
+  const database = getDb();
+  const row = database.prepare('SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0').get(userId) as { count: number };
+  return row.count;
+}
+
+export function markNotificationRead(notificationId: number, userId: number) {
+  const database = getDb();
+  database.prepare('UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?').run(notificationId, userId);
+}
+
+export function markAllNotificationsRead(userId: number) {
+  const database = getDb();
+  database.prepare('UPDATE notifications SET read = 1 WHERE user_id = ?').run(userId);
 }
 
 // ---- Game Results ----
@@ -220,6 +487,12 @@ export function recordGameResult(userId: number, gameType: string, score: number
   }
 }
 
+export function getDailyStats(userId: number) {
+  const database = getDb();
+  const today = new Date().toISOString().split('T')[0];
+  return database.prepare('SELECT * FROM daily_stats WHERE user_id = ? AND date = ?').get(userId, today) as DailyStat | undefined;
+}
+
 // ---- Competitions ----
 export function getCompetitionEntries(type: string, date: string) {
   const database = getDb();
@@ -244,10 +517,28 @@ export function voteOnEntry(entryId: number, userId: number) {
   try {
     database.prepare('INSERT INTO competition_votes (entry_id, user_id) VALUES (?, ?)').run(entryId, userId);
     database.prepare('UPDATE competition_entries SET votes = votes + 1 WHERE id = ?').run(entryId);
+    // Notify entry owner
+    const entry = database.prepare('SELECT user_id, competition_type FROM competition_entries WHERE id = ?').get(entryId) as { user_id: number; competition_type: string } | undefined;
+    if (entry && entry.user_id !== userId) {
+      const voter = database.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
+      if (voter) {
+        createNotification(entry.user_id, 'competition_vote', `${voter.username} voted for your ${entry.competition_type} competition entry!`);
+      }
+    }
     return { voted: true };
   } catch {
     return { voted: false, error: 'Already voted' };
   }
+}
+
+export function getWeeklyCompetitionWins(userId: number) {
+  const database = getDb();
+  const weekStart = getWeekStart();
+  // Count competition entries from this week where the user had the most votes
+  return database.prepare(`
+    SELECT COUNT(*) as wins FROM competition_entries
+    WHERE user_id = ? AND date >= ? AND votes > 0
+  `).get(userId, weekStart) as { wins: number };
 }
 
 // ---- Leaderboard ----
@@ -255,13 +546,42 @@ export function getWeeklyLeaderboard() {
   const database = getDb();
   const weekStart = getWeekStart();
   return database.prepare(`
-    SELECT u.id, u.username, u.avatar_url, COALESCE(wp.points, 0) as weekly_points
+    SELECT u.id, u.username, u.avatar_url, u.verified, COALESCE(wp.points, 0) as weekly_points
     FROM users u
     LEFT JOIN weekly_points wp ON u.id = wp.user_id AND wp.week_start = ?
     WHERE wp.points > 0
     ORDER BY weekly_points DESC
     LIMIT 50
   `).all(weekStart) as LeaderboardEntry[];
+}
+
+export function getUserWeeklyRank(userId: number): number {
+  const database = getDb();
+  const weekStart = getWeekStart();
+  const rows = database.prepare(`
+    SELECT user_id FROM weekly_points
+    WHERE week_start = ?
+    ORDER BY points DESC
+  `).all(weekStart) as { user_id: number }[];
+  const idx = rows.findIndex(r => r.user_id === userId);
+  return idx === -1 ? 0 : idx + 1;
+}
+
+export function getUserWeeklyPoints(userId: number): number {
+  const database = getDb();
+  const weekStart = getWeekStart();
+  const row = database.prepare('SELECT points FROM weekly_points WHERE user_id = ? AND week_start = ?').get(userId, weekStart) as { points: number } | undefined;
+  return row?.points ?? 0;
+}
+
+export function awardVerifiedBadgesToTopThree() {
+  const database = getDb();
+  const leaderboard = getWeeklyLeaderboard();
+  const top3 = leaderboard.slice(0, 3);
+  for (const entry of top3) {
+    setUserVerified(entry.id, true);
+    createNotification(entry.id, 'competition_win', `Congratulations! You finished in the top 3 on the weekly leaderboard and earned the Verified badge!`);
+  }
 }
 
 // ---- Blog ----
@@ -283,15 +603,6 @@ export function upsertBlogPost(slug: string, title: string, excerpt: string, con
   `).run(slug, title, excerpt, content, author, readTime, title, excerpt, content, author, readTime);
 }
 
-// ---- Helpers ----
-function getWeekStart(): string {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(now.setDate(diff));
-  return monday.toISOString().split('T')[0];
-}
-
 // ---- Types ----
 export interface User {
   id: number;
@@ -300,6 +611,8 @@ export interface User {
   password_hash: string;
   avatar_url: string | null;
   total_points: number;
+  verified: number;
+  referral_code: string | null;
   created_at: string;
 }
 
@@ -312,9 +625,14 @@ export interface VideoWithUser {
   thumbnail_url: string | null;
   views: number;
   likes: number;
+  download_count: number;
+  hashtags: string | null;
+  flagged: number;
+  moderated: number;
   created_at: string;
   username: string;
   avatar_url: string | null;
+  verified: number;
 }
 
 export interface DailyStat {
@@ -342,6 +660,7 @@ export interface LeaderboardEntry {
   id: number;
   username: string;
   avatar_url: string | null;
+  verified: number;
   weekly_points: number;
 }
 
@@ -364,4 +683,22 @@ export interface BlogPostSummary {
   author: string;
   read_time: number;
   created_at: string;
+}
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  type: string;
+  message: string;
+  read: number;
+  created_at: string;
+}
+
+export interface ReferralWithUser {
+  id: number;
+  referrer_id: number;
+  referred_id: number;
+  points_awarded: number;
+  created_at: string;
+  referred_username: string;
 }
