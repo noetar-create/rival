@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import Database from 'better-sqlite3';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import path from 'path';
 
 export async function GET() {
@@ -8,9 +8,10 @@ export async function GET() {
   const dbExists = existsSync(dbPath);
   const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
   const dirExists = existsSync(uploadDir);
+  const files = dirExists ? readdirSync(uploadDir) : [];
 
   if (!dbExists) {
-    return NextResponse.json({ error: 'Database does not exist', dbPath, uploadDirExists: dirExists, cwd: process.cwd() });
+    return NextResponse.json({ error: 'Database does not exist', dbPath, uploadDirExists: dirExists, files, cwd: process.cwd() });
   }
 
   const db = new Database(dbPath, { readonly: true });
@@ -18,5 +19,5 @@ export async function GET() {
   const userCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
   db.close();
 
-  return NextResponse.json({ videos, userCount, uploadDirExists: dirExists, dbPath, cwd: process.cwd() });
+  return NextResponse.json({ videos, userCount, uploadDirExists: dirExists, files, dbPath, cwd: process.cwd() });
 }
