@@ -8,10 +8,27 @@ let db: Database.Database;
 
 function getDb(): Database.Database {
   if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initSchema();
+    try {
+      db = new Database(DB_PATH);
+      db.pragma('journal_mode = WAL');
+      db.pragma('foreign_keys = ON');
+      initSchema();
+    } catch {
+      // WAL/SHM may be corrupted from a previous full-disk event — delete and retry
+      try {
+        const { unlinkSync, existsSync } = require('fs') as typeof import('fs');
+        const walPath = DB_PATH + '-wal';
+        const shmPath = DB_PATH + '-shm';
+        if (existsSync(walPath)) unlinkSync(walPath);
+        if (existsSync(shmPath)) unlinkSync(shmPath);
+        db = new Database(DB_PATH);
+        db.pragma('journal_mode = WAL');
+        db.pragma('foreign_keys = ON');
+        initSchema();
+      } catch (e2) {
+        throw e2;
+      }
+    }
   }
   return db;
 }

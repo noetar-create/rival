@@ -178,7 +178,7 @@ async function generateGames() {
 async function cleanupOldFiles(uploadDir: string) {
   try {
     const files = await readdir(uploadDir);
-    const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000; // 3 days
+    const cutoff = Date.now() - 6 * 60 * 60 * 1000; // 6 hours
     await Promise.allSettled(files.map(async (f) => {
       const fp = path.join(uploadDir, f);
       const s = await stat(fp);
