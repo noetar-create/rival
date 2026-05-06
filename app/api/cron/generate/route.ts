@@ -71,29 +71,30 @@ async function generateAudio(script: string, voiceId: string): Promise<Buffer> {
 }
 
 async function createVideoFile(audioPath: string, title: string, outputPath: string, niche: string): Promise<void> {
-  const colors: Record<string, string> = {
-    psychology: '0x1a0a2e:0x16213e',
-    true_crime: '0x1a0000:0x2d0000',
-    relationships: '0x1a0a1a:0x2d0a2d',
-    finance: '0x0a1a0a:0x0a2d0a',
-    motivation: '0x1a1a00:0x2d2d00',
-    health: '0x001a1a:0x002d2d',
-    history: '0x1a0a00:0x2d1a00',
+  const bgColors: Record<string, string> = {
+    psychology: '0x1a0a2e',
+    true_crime: '0x2d0000',
+    relationships: '0x2d0a2d',
+    finance: '0x0a2d0a',
+    motivation: '0x2d2d00',
+    health: '0x002d2d',
+    history: '0x2d1a00',
   };
-  const [c1, c2] = (colors[niche] || '0x0a0a1a:0x1a0a2e').split(':');
-  const safeTitle = title.replace(/'/g, '').substring(0, 50);
-  const cmd = `ffmpeg -y \
-    -f lavfi -i "color=c=${c1}:size=720x1280:rate=30" \
-    -i "${audioPath}" \
-    -filter_complex "\
-      [0:v]gradients=s=720x1280:c0=${c1}:c1=${c2}:type=linear:speed=0.3[bg];\
-      [bg]drawtext=text='RIVAL':fontsize=48:fontcolor=white@0.3:x=(w-tw)/2:y=100:font=Sans:style=Bold[v1];\
-      [v1]drawtext=text='${safeTitle}':fontsize=36:fontcolor=white:x=(w-tw)/2:y=(h-th)/2:font=Sans:style=Bold:line_spacing=10:text_shaping=1[v2]" \
-    -map "[v2]" -map "1:a" \
-    -c:v libx264 -preset fast -crf 28 \
-    -c:a aac -b:a 128k \
-    -shortest \
-    "${outputPath}" 2>&1`;
+  const bgColor = bgColors[niche] || '0x1a0a2e';
+  const safeTitle = title.replace(/['"\\:]/g, '').substring(0, 40);
+  const cmd = [
+    'ffmpeg', '-y',
+    '-f', 'lavfi', '-i', `color=c=${bgColor}:size=720x1280:rate=24`,
+    '-i', audioPath,
+    '-filter_complex',
+    `[0:v]drawtext=text='RIVAL':fontsize=60:fontcolor=white@0.25:x=(w-tw)/2:y=150:font=Sans,drawtext=text='${safeTitle}':fontsize=38:fontcolor=white:x=(w-tw)/2:y=(h/2)-60:font=Sans[v]`,
+    '-map', '[v]',
+    '-map', '1:a',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '30',
+    '-c:a', 'aac', '-b:a', '96k',
+    '-shortest',
+    outputPath,
+  ].join(' ');
   await execAsync(cmd);
 }
 
@@ -119,9 +120,13 @@ async function runGeneration() {
       const videoPath = path.join(uploadDir, `${baseName}.mp4`);
 
       await writeFile(audioPath, audioBuffer);
-      await createVideoFile(audioPath, title, videoPath, niche.name);
-
-      const fileUrl = `/uploads/videos/${baseName}.mp4`;
+      let fileUrl = `/uploads/videos/${baseName}.mp3`;
+      try {
+        await createVideoFile(audioPath, title, videoPath, niche.name);
+        fileUrl = `/uploads/videos/${baseName}.mp4`;
+      } catch (ffErr) {
+        console.error('ffmpeg failed, using audio only:', ffErr);
+      }
       const hashtags = `#${niche.name} #rival #compete`;
       createVideo(systemUser.id, title, hashtags, fileUrl, '', hashtags);
     } catch (err) {
