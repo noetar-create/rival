@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { getAuthUser } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
@@ -10,9 +10,9 @@ export async function POST(request: NextRequest) {
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 });
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
       max_tokens: 200,
       messages: [{
         role: 'user',
@@ -27,7 +27,7 @@ Respond with JSON only: {"safe": true/false, "reason": "brief explanation"}`
       }]
     });
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : '{"safe": true, "reason": "OK"}';
+    const text = response.choices[0]?.message?.content ?? '{"safe": true, "reason": "OK"}';
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) return NextResponse.json({ safe: true, reason: 'Could not parse moderation response' });
 
@@ -35,7 +35,6 @@ Respond with JSON only: {"safe": true/false, "reason": "brief explanation"}`
     return NextResponse.json(result);
   } catch (err) {
     console.error('Moderation error:', err);
-    // On error, default to safe (fail open)
     return NextResponse.json({ safe: true, reason: 'Moderation service unavailable' });
   }
 }

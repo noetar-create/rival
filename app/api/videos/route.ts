@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server';
 import { getVideos, createVideo, createVideoFlagged } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 async function moderateContent(title: string, description: string): Promise<{ safe: boolean; reason: string }> {
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
       max_tokens: 200,
       messages: [{
         role: 'user',
@@ -21,7 +21,7 @@ Description: "${description || ''}"
 Respond with JSON only: {"safe": true/false, "reason": "brief explanation"}`
       }]
     });
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
+    const text = response.choices[0]?.message?.content ?? '';
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) return { safe: true, reason: 'OK' };
     return JSON.parse(match[0]) as { safe: boolean; reason: string };
