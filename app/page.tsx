@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { getVideos } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 import VideoCard from '@/components/VideoCard';
 import VideoFeed from '@/components/VideoFeed';
 
