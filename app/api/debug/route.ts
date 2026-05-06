@@ -4,9 +4,10 @@ import { existsSync, readdirSync } from 'fs';
 import path from 'path';
 
 export async function GET() {
-  const dbPath = path.join(process.cwd(), 'rival.db');
+  const dataPath = process.env.DATA_PATH || process.cwd();
+  const dbPath = path.join(dataPath, 'rival.db');
   const dbExists = existsSync(dbPath);
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
+  const uploadDir = path.join(process.env.DATA_PATH || path.join(process.cwd(), 'public'), 'uploads', 'videos');
   const dirExists = existsSync(uploadDir);
   const files = dirExists ? readdirSync(uploadDir) : [];
 

@@ -7,7 +7,8 @@ export async function GET(
   { params }: { params: Promise<{ file: string }> }
 ) {
   const { file } = await params;
-  const filePath = path.join(process.cwd(), 'public', 'uploads', 'videos', file);
+  const dataPath = process.env.DATA_PATH || path.join(process.cwd(), 'public');
+  const filePath = path.join(dataPath, 'uploads', 'videos', file);
 
   if (!existsSync(filePath)) {
     return new NextResponse('Not found', { status: 404 });

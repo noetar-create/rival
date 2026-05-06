@@ -112,10 +112,11 @@ async function fetchStockVideo(keyword: string, destPath: string): Promise<void>
     if (!data.videos?.length) continue;
 
     const video = data.videos[Math.floor(Math.random() * Math.min(5, data.videos.length))];
-    const files = video.video_files.sort((a, b) => (a.width * a.height) - (b.width * b.height));
+    // Sort largest first — we want the sharpest source to crop from
+    const files = video.video_files.sort((a, b) => (b.width * b.height) - (a.width * a.height));
 
-    // Prefer SD for smaller file size, fall back to smallest HD
-    const file = files.find(f => f.quality === 'sd') || files[0];
+    // HD first, then largest available — SD looks blurry at 1080p output
+    const file = files.find(f => f.quality === 'hd') || files[0];
     if (file?.link) { videoUrl = file.link; break; }
   }
 
@@ -141,18 +142,18 @@ async function assembleVideo(
     '-stream_loop', '-1', '-i', stockPath,
     '-i', audioPath,
     '-filter_complex',
-    // Scale to portrait, crop to 720x1280, dim with drawbox, add title caption
-    `[0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280[bg];` +
-    `[bg]drawbox=x=0:y=0:w=iw:h=ih:color=black@0.35:t=fill[dim];` +
-    `[dim]drawtext=text='${safeTitle}':fontsize=34:fontcolor=white:` +
-    `x=(w-tw)/2:y=h-160:font=Sans:box=1:boxcolor=black@0.55:boxborderw=14[v]`,
+    // Full HD portrait (1080×1920), bicubic upscale, light dim, crisp caption
+    `[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920[bg];` +
+    `[bg]drawbox=x=0:y=0:w=iw:h=ih:color=black@0.25:t=fill[dim];` +
+    `[dim]drawtext=text='${safeTitle}':fontsize=52:fontcolor=white:` +
+    `x=(w-tw)/2:y=h-220:font=Sans:box=1:boxcolor=black@0.5:boxborderw=20[v]`,
     '-map', '[v]',
     '-map', '1:a',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-    '-c:a', 'aac', '-b:a', '96k',
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+    '-c:a', 'aac', '-b:a', '128k',
     '-shortest',
     outputPath,
-  ]);
+  ], { timeout: 300000 });
 }
 
 async function generateGames() {
@@ -175,7 +176,8 @@ async function generateGames() {
 }
 
 async function runGeneration() {
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
+  const dataPath = process.env.DATA_PATH || path.join(process.cwd(), 'public');
+  const uploadDir = path.join(dataPath, 'uploads', 'videos');
   await mkdir(uploadDir, { recursive: true });
 
   const systemUser = await ensureSystemUser();
