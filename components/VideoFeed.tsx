@@ -438,7 +438,7 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
 
   return (
     <div className="relative w-full h-screen snap-start snap-always flex-shrink-0 bg-black flex items-center justify-center overflow-hidden">
-      <div className="relative h-full w-full max-w-[430px] overflow-hidden">
+      <div className="relative h-full mx-auto overflow-hidden" style={{ width: 'min(100%, calc(100vh * 9 / 16))' }}>
         {/* Gradient background always visible — shows while video buffers or if no file */}
         <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center`} onClick={handleVideoClick}>
           <div className="text-center px-8">
@@ -718,7 +718,7 @@ export default function VideoFeed({ videos: initialVideos, games }: VideoFeedPro
   if (feedItems.length === 0) return null;
 
   return (
-    <div className="relative md:max-w-[430px] md:mx-auto">
+    <div className="relative">
       {/* Tab switcher — overlaid at top like TikTok */}
       <div className="fixed top-0 left-0 right-0 z-40 flex justify-center pt-3 pb-2 pointer-events-none md:left-64">
         <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded-full px-1.5 py-1 pointer-events-auto">

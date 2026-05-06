@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function UploadPage() {
   const [title, setTitle] = useState('');
@@ -10,6 +10,15 @@ export default function UploadPage() {
   const [contentWarning, setContentWarning] = useState(false);
   const [duetOfId, setDuetOfId] = useState<number | null>(null);
   const [duetInfo, setDuetInfo] = useState<{ username: string; title: string } | null>(null);
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -23,9 +32,53 @@ export default function UploadPage() {
         }).catch(() => {});
     }
   }, []);
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+
+  const uploadFile = async (file: File) => {
+    setError('');
+    setUploading(true);
+    setUploadProgress(0);
+
+    // Simulate progress while XHR uploads
+    const interval = setInterval(() => {
+      setUploadProgress(p => Math.min(p + 5, 90));
+    }, 200);
+
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      clearInterval(interval);
+      setUploadProgress(100);
+
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        setError(d.error || 'Upload failed');
+        setUploading(false);
+        return;
+      }
+      const d = await res.json() as { url: string };
+      setVideoUrl(d.url);
+      setUploadedFile(file.name);
+    } catch {
+      clearInterval(interval);
+      setError('Upload failed. Check your connection and try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadFile(file);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +95,7 @@ export default function UploadPage() {
     } else if (res.status === 401) {
       window.location.href = '/login';
     } else {
-      const d = await res.json();
+      const d = await res.json() as { error?: string };
       setError(d.error || 'Failed to upload');
     }
     setSubmitting(false);
@@ -76,7 +129,6 @@ export default function UploadPage() {
         <p className="text-white/50">Share a short video with the Rival community. Enter it in Video Vote for a chance to win +2 points.</p>
       </div>
 
-      {/* Duet context banner */}
       {duetInfo && (
         <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 mb-5 flex items-center gap-3">
           <span className="text-2xl">🎵</span>
@@ -88,10 +140,56 @@ export default function UploadPage() {
       )}
 
       {/* Upload zone */}
-      <div className="border-2 border-dashed border-white/10 hover:border-purple-500/40 rounded-2xl p-10 text-center mb-6 transition-colors group cursor-pointer bg-[#111111]">
-        <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">🎬</div>
-        <p className="text-white/60 font-semibold mb-1">Video upload coming soon</p>
-        <p className="text-white/30 text-sm">For now, paste a video URL or describe your video below</p>
+      <div
+        className={`border-2 border-dashed rounded-2xl p-10 text-center mb-6 transition-all cursor-pointer bg-[#111111] ${
+          dragOver ? 'border-purple-500 bg-purple-500/10' : uploadedFile ? 'border-green-500/50 bg-green-500/5' : 'border-white/10 hover:border-purple-500/40'
+        }`}
+        onClick={() => !uploading && fileInputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/mp4,video/webm,video/quicktime,video/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        {uploading ? (
+          <div>
+            <div className="text-3xl mb-3 animate-pulse">🎬</div>
+            <p className="text-white/80 font-semibold mb-3">Uploading...</p>
+            <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-200"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <p className="text-white/40 text-xs mt-2">{uploadProgress}%</p>
+          </div>
+        ) : uploadedFile ? (
+          <div>
+            <div className="text-4xl mb-3">✅</div>
+            <p className="text-green-400 font-semibold mb-1">Video uploaded!</p>
+            <p className="text-white/30 text-sm truncate max-w-xs mx-auto">{uploadedFile}</p>
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); setUploadedFile(null); setVideoUrl(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+              className="mt-3 text-white/40 text-xs hover:text-white/70 transition-colors"
+            >
+              Replace video
+            </button>
+          </div>
+        ) : (
+          <div className="group">
+            <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">🎬</div>
+            <p className="text-white/80 font-semibold mb-1">Drop your video here</p>
+            <p className="text-white/40 text-sm">or click to browse</p>
+            <p className="text-white/25 text-xs mt-2">MP4, WebM, MOV · Max 200 MB</p>
+          </div>
+        )}
       </div>
 
       <form onSubmit={submit} className="space-y-4">
@@ -111,9 +209,10 @@ export default function UploadPage() {
           <input
             value={videoUrl}
             onChange={e => setVideoUrl(e.target.value)}
-            placeholder="https://youtube.com/shorts/... or TikTok link"
+            placeholder="Or paste a YouTube Shorts / TikTok link"
             className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-purple-500/50 transition-colors"
           />
+          {uploadedFile && <p className="text-white/30 text-xs mt-1">Auto-filled from your upload above</p>}
         </div>
 
         <div>
@@ -158,14 +257,13 @@ export default function UploadPage() {
 
         <button
           type="submit"
-          disabled={!title.trim() || submitting}
+          disabled={!title.trim() || submitting || uploading}
           className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-xl transition-all duration-200 disabled:opacity-40 hover:shadow-lg hover:shadow-purple-500/30"
         >
-          {submitting ? 'Uploading...' : 'Post Video'}
+          {submitting ? 'Posting...' : 'Post Video'}
         </button>
       </form>
 
-      {/* Tips */}
       <div className="mt-8 bg-[#111111] border border-white/5 rounded-2xl p-5">
         <h3 className="text-white font-bold text-sm mb-3">Tips for viral videos on Rival</h3>
         <ul className="space-y-2 text-white/40 text-xs">
