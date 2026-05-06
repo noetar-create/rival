@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import GameSlide from './GameSlide';
+import type { FeedGame } from '@/lib/db';
 
 interface FeedVideo {
   id: number;
@@ -239,21 +241,34 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
   );
 }
 
+type FeedItem =
+  | { type: 'video'; data: FeedVideo }
+  | { type: 'game'; data: FeedGame };
+
 interface VideoFeedProps {
   videos: FeedVideo[];
+  games: FeedGame[];
 }
 
-export default function VideoFeed({ videos }: VideoFeedProps) {
+export default function VideoFeed({ videos, games }: VideoFeedProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [muted, setMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Mix games into feed every 5 videos
+  const feedItems: FeedItem[] = [];
+  let gameIdx = 0;
+  for (let i = 0; i < videos.length; i++) {
+    feedItems.push({ type: 'video', data: videos[i] });
+    if ((i + 1) % 5 === 0 && gameIdx < games.length) {
+      feedItems.push({ type: 'game', data: games[gameIdx++] });
+    }
+  }
+
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
-    const scrollTop = container.scrollTop;
-    const height = container.clientHeight;
-    const index = Math.round(scrollTop / height);
+    const index = Math.round(container.scrollTop / container.clientHeight);
     setActiveIndex(index);
   }, []);
 
@@ -264,20 +279,21 @@ export default function VideoFeed({ videos }: VideoFeedProps) {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
-  if (videos.length === 0) return null;
+  if (feedItems.length === 0) return null;
 
   return (
     <div
       ref={containerRef}
       className="h-screen overflow-y-scroll"
-      style={{
-        scrollSnapType: 'y mandatory',
-        WebkitOverflowScrolling: 'touch',
-      }}
+      style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch' }}
     >
-      {videos.map((video, i) => (
-        <VideoSlide key={video.id} video={video} isActive={i === activeIndex} muted={muted} setMuted={setMuted} />
-      ))}
+      {feedItems.map((item, i) =>
+        item.type === 'video' ? (
+          <VideoSlide key={`v-${item.data.id}`} video={item.data} isActive={i === activeIndex} muted={muted} setMuted={setMuted} />
+        ) : (
+          <GameSlide key={`g-${item.data.id}`} game={item.data} isActive={i === activeIndex} />
+        )
+      )}
     </div>
   );
 }

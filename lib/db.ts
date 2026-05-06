@@ -150,6 +150,16 @@ function initSchema() {
       read_time INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS feed_games (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      question TEXT NOT NULL,
+      options TEXT NOT NULL,
+      correct_index INTEGER NOT NULL,
+      category TEXT,
+      fun_fact TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Run migrations for existing databases
@@ -584,6 +594,19 @@ export function awardVerifiedBadgesToTopThree() {
   }
 }
 
+// ---- Feed Games ----
+export function createFeedGame(question: string, options: string[], correctIndex: number, category: string, funFact: string) {
+  const database = getDb();
+  database.prepare(
+    'INSERT INTO feed_games (question, options, correct_index, category, fun_fact) VALUES (?, ?, ?, ?, ?)'
+  ).run(question, JSON.stringify(options), correctIndex, category, funFact);
+}
+
+export function getFeedGames(limit = 20): FeedGame[] {
+  const database = getDb();
+  return database.prepare('SELECT * FROM feed_games ORDER BY RANDOM() LIMIT ?').all(limit) as FeedGame[];
+}
+
 // ---- Blog ----
 export function getBlogPosts() {
   const database = getDb();
@@ -682,6 +705,16 @@ export interface BlogPostSummary {
   excerpt: string;
   author: string;
   read_time: number;
+  created_at: string;
+}
+
+export interface FeedGame {
+  id: number;
+  question: string;
+  options: string; // JSON array
+  correct_index: number;
+  category: string | null;
+  fun_fact: string | null;
   created_at: string;
 }
 

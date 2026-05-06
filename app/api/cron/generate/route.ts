@@ -5,7 +5,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, mkdir, unlink } from 'fs/promises';
 import path from 'path';
-import { createVideo, awardVerifiedBadgesToTopThree } from '@/lib/db';
+import { createVideo, createFeedGame, awardVerifiedBadgesToTopThree } from '@/lib/db';
 
 const execFileAsync = promisify(execFile);
 
@@ -155,6 +155,25 @@ async function assembleVideo(
   ]);
 }
 
+async function generateGames() {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1500,
+    messages: [{
+      role: 'user',
+      content: `Generate 5 trivia questions for a TikTok-style feed game. Make each one surprising, mind-blowing, or hard to believe. Mix these categories: science, history, geography, nature, space, food, animals, body, psychology, finance. Each question needs exactly 4 answer options with only 1 correct. Include a short fun fact (1 sentence) revealed after answering. Return a JSON array only, no markdown: [{"question":"...","options":["a","b","c","d"],"correct_index":0,"category":"science","fun_fact":"..."}]`
+    }]
+  });
+  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) return;
+  const games = JSON.parse(match[0]) as Array<{ question: string; options: string[]; correct_index: number; category: string; fun_fact: string }>;
+  for (const g of games) {
+    try { createFeedGame(g.question, g.options, g.correct_index, g.category, g.fun_fact); } catch {}
+  }
+}
+
 async function runGeneration() {
   const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
   await mkdir(uploadDir, { recursive: true });
@@ -200,6 +219,7 @@ async function runGeneration() {
   }
 
   try { awardVerifiedBadgesToTopThree(); } catch {}
+  try { await generateGames(); } catch (e) { console.error('Game generation failed:', e); }
 }
 
 export async function GET(req: NextRequest) {

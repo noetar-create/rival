@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getVideos } from '@/lib/db';
+import { getVideos, getFeedGames } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 import VideoCard from '@/components/VideoCard';
@@ -45,6 +45,9 @@ export default function HomePage() {
   } catch {}
   const videos = dbVideos.length > 0 ? dbVideos : mockVideos;
 
+  let games: ReturnType<typeof getFeedGames> = [];
+  try { games = getFeedGames(20); } catch {}
+
   return (
     <>
       <script
@@ -52,8 +55,8 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* TikTok-style vertical video feed */}
-      <VideoFeed videos={videos} />
+      {/* TikTok-style vertical video feed with inline games */}
+      <VideoFeed videos={videos} games={games} />
 
       {/* Section divider */}
       <div className="relative py-6 flex items-center justify-center">
