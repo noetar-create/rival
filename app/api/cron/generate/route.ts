@@ -97,29 +97,24 @@ async function createVideoFile(audioPath: string, title: string, outputPath: str
   await execAsync(cmd);
 }
 
-export async function GET(req: NextRequest) {
-  const secret = req.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const results = [];
+async function runGeneration() {
   const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
   await mkdir(uploadDir, { recursive: true });
 
   const systemUser = await ensureSystemUser();
-  if (!systemUser) return NextResponse.json({ error: 'No system user' }, { status: 500 });
+  if (!systemUser) return;
 
   const today = new Date().toISOString().split('T')[0];
+  const timestamp = Date.now();
 
   for (let i = 0; i < 2; i++) {
-    const niche = NICHES[i % NICHES.length];
+    const niche = NICHES[(timestamp + i) % NICHES.length];
     const voiceId = VOICES[i % VOICES.length];
     try {
       const { title, script } = await generateScript(niche);
       const audioBuffer = await generateAudio(script, voiceId);
 
-      const baseName = `rival_${niche.name}_${today}_${i}`;
+      const baseName = `rival_${niche.name}_${today}_${timestamp}_${i}`;
       const audioPath = path.join(uploadDir, `${baseName}.mp3`);
       const videoPath = path.join(uploadDir, `${baseName}.mp4`);
 
@@ -129,19 +124,22 @@ export async function GET(req: NextRequest) {
       const fileUrl = `/uploads/videos/${baseName}.mp4`;
       const hashtags = `#${niche.name} #rival #compete`;
       createVideo(systemUser.id, title, hashtags, fileUrl, '', hashtags);
-
-      results.push({ title, niche: niche.name, url: fileUrl });
     } catch (err) {
-      results.push({ error: String(err), niche: niche.name });
+      console.error('Video generation error:', err);
     }
   }
 
-  // Award verified badges to last week's top 3
-  try {
-    awardVerifiedBadgesToTopThree();
-  } catch (err) {
-    console.error('Badge award error:', err);
+  try { awardVerifiedBadgesToTopThree(); } catch {}
+}
+
+export async function GET(req: NextRequest) {
+  const secret = req.headers.get('x-cron-secret');
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  return NextResponse.json({ generated: results.length, results, date: today });
+  // Return immediately — process runs in background
+  runGeneration().catch(console.error);
+
+  return NextResponse.json({ status: 'started', date: new Date().toISOString() });
 }
