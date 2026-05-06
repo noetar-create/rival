@@ -7,7 +7,7 @@ const mobileItems = [
   { href: '/', label: 'Home', icon: '🏠' },
   { href: '/search', label: 'Search', icon: '🔍' },
   { href: '/upload', label: 'Upload', icon: '⬆️' },
-  { href: '/leaderboard', label: 'Ranks', icon: '🏆' },
+  { href: '/trending', label: 'Trending', icon: '🔥' },
   { href: '/dashboard', label: 'Me', icon: '👤' },
 ];
 

@@ -181,6 +181,27 @@ function initSchema() {
       FOREIGN KEY (follower_id) REFERENCES users(id),
       FOREIGN KEY (following_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(video_id, user_id),
+      FOREIGN KEY (video_id) REFERENCES videos(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS blocks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      blocker_id INTEGER NOT NULL,
+      blocked_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(blocker_id, blocked_id),
+      FOREIGN KEY (blocker_id) REFERENCES users(id),
+      FOREIGN KEY (blocked_id) REFERENCES users(id)
+    );
   `);
 
   // Run migrations for existing databases
@@ -613,6 +634,90 @@ export function awardVerifiedBadgesToTopThree() {
     setUserVerified(entry.id, true);
     createNotification(entry.id, 'competition_win', `Congratulations! You finished in the top 3 on the weekly leaderboard and earned the Verified badge!`);
   }
+}
+
+// ---- Feeds ----
+export function getForYouFeed(userId: number | null, limit = 20): VideoWithUser[] {
+  const database = getDb();
+  if (userId) {
+    return database.prepare(`
+      SELECT v.*, u.username, u.avatar_url, u.verified,
+        (
+          CASE WHEN EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND following_id = v.user_id) THEN 50 ELSE 0 END +
+          CASE WHEN v.created_at > datetime('now', '-24 hours') THEN 30 ELSE 0 END +
+          CASE WHEN v.created_at > datetime('now', '-48 hours') THEN 10 ELSE 0 END +
+          (v.likes * 2) + (v.views / 10)
+        ) as score
+      FROM videos v
+      JOIN users u ON v.user_id = u.id
+      WHERE v.flagged = 0
+        AND v.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = ?)
+        AND v.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = ?)
+      ORDER BY score DESC, RANDOM()
+      LIMIT ?
+    `).all(userId, userId, userId, limit) as VideoWithUser[];
+  }
+  return getTrendingFeed(limit);
+}
+
+export function getFollowingFeed(userId: number, limit = 20): VideoWithUser[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v
+    JOIN users u ON v.user_id = u.id
+    WHERE v.flagged = 0
+      AND v.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?)
+    ORDER BY v.created_at DESC
+    LIMIT ?
+  `).all(userId, limit) as VideoWithUser[];
+}
+
+export function getTrendingFeed(limit = 20): VideoWithUser[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v
+    JOIN users u ON v.user_id = u.id
+    WHERE v.flagged = 0
+      AND v.created_at > datetime('now', '-48 hours')
+    ORDER BY (v.likes * 3 + v.views) DESC
+    LIMIT ?
+  `).all(limit) as VideoWithUser[];
+}
+
+// ---- Reports & Blocks ----
+export function createReport(videoId: number, userId: number, reason: string) {
+  const database = getDb();
+  try {
+    database.prepare('INSERT INTO reports (video_id, user_id, reason) VALUES (?, ?, ?)').run(videoId, userId, reason);
+    return { reported: true };
+  } catch {
+    return { reported: false, error: 'Already reported' };
+  }
+}
+
+export function blockUser(blockerId: number, blockedId: number) {
+  const database = getDb();
+  const existing = database.prepare('SELECT id FROM blocks WHERE blocker_id = ? AND blocked_id = ?').get(blockerId, blockedId);
+  if (existing) {
+    database.prepare('DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?').run(blockerId, blockedId);
+    return { blocked: false };
+  }
+  database.prepare('INSERT INTO blocks (blocker_id, blocked_id) VALUES (?, ?)').run(blockerId, blockedId);
+  return { blocked: true };
+}
+
+export function getReports() {
+  const database = getDb();
+  return database.prepare(`
+    SELECT r.*, v.title, u.username as reporter
+    FROM reports r
+    JOIN videos v ON r.video_id = v.id
+    JOIN users u ON r.user_id = u.id
+    ORDER BY r.created_at DESC
+    LIMIT 100
+  `).all();
 }
 
 // ---- Views ----

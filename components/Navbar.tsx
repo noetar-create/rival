@@ -17,6 +17,7 @@ const navItems = [
   { href: '/blog', label: 'Blog', icon: '📝' },
   { href: '/rules', label: 'Rules', icon: '📋' },
   { href: '/search', label: 'Search', icon: '🔍' },
+  { href: '/trending', label: 'Trending', icon: '🔥' },
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/saved', label: 'Saved', icon: '🔖' },
 ];
