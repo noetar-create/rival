@@ -155,7 +155,7 @@ async function runGeneration() {
   const today = new Date().toISOString().split('T')[0];
   const timestamp = Date.now();
 
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const niche = NICHES[(timestamp + i) % NICHES.length];
     const voiceId = VOICES[i % VOICES.length];
     const baseName = `rival_${niche.name}_${today}_${timestamp}_${i}`;
