@@ -504,13 +504,13 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
   );
 
   return (
-    <div className="relative w-full h-screen snap-start snap-always flex-shrink-0 bg-black flex items-center justify-center">
+    <div className="relative w-full h-screen snap-start snap-always flex-shrink-0 bg-black flex items-center justify-center overflow-hidden">
       {/* On desktop: video card + action buttons sit side-by-side, aligned to bottom */}
-      <div className="flex items-end h-full">
-        {/* Video card — portrait aspect ratio scales with screen height */}
+      <div className="flex items-end" style={{ height: '100vh' }}>
+        {/* Video card — explicit 100vh height, 9:16 width */}
         <div
-          className="relative h-full overflow-hidden"
-          style={{ aspectRatio: '9/16' }}
+          className="relative overflow-hidden"
+          style={{ height: '100vh', width: 'calc(100vh * 9 / 16)', maxWidth: '100vw' }}
         >
           {/* Gradient background always visible — shows while video buffers or if no file */}
           <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center`} onClick={handleVideoClick}>

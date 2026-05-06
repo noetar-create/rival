@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { writeFile, mkdir, unlink } from 'fs/promises';
+import { writeFile, mkdir, unlink, readdir, stat } from 'fs/promises';
 import path from 'path';
 import { createVideo, createFeedGame, awardVerifiedBadgesToTopThree } from '@/lib/db';
 
@@ -175,10 +175,26 @@ async function generateGames() {
   }
 }
 
+async function cleanupOldFiles(uploadDir: string) {
+  try {
+    const files = await readdir(uploadDir);
+    const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000; // 3 days
+    await Promise.allSettled(files.map(async (f) => {
+      const fp = path.join(uploadDir, f);
+      const s = await stat(fp);
+      if (s.mtimeMs < cutoff) await unlink(fp);
+    }));
+    console.log('[rival] Cleaned up old upload files');
+  } catch (e) {
+    console.error('[rival] Cleanup error:', e);
+  }
+}
+
 async function runGeneration() {
   const dataPath = process.env.DATA_PATH || process.cwd();
   const uploadDir = path.join(dataPath, 'uploads', 'videos');
   await mkdir(uploadDir, { recursive: true });
+  await cleanupOldFiles(uploadDir);
 
   const systemUser = await ensureSystemUser();
   if (!systemUser) return;
