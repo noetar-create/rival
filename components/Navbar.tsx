@@ -18,6 +18,11 @@ const navItems = [
   { href: '/rules', label: 'Rules', icon: '📋' },
   { href: '/search', label: 'Search', icon: '🔍' },
   { href: '/trending', label: 'Trending', icon: '🔥' },
+  { href: '/messages', label: 'Messages', icon: '💬' },
+  { href: '/analytics', label: 'Analytics', icon: '📈' },
+  { href: '/sounds', label: 'Sounds', icon: '🎵' },
+  { href: '/compete', label: 'All Competitions', icon: '🥊' },
+  { href: '/about', label: 'About Rival', icon: 'ℹ️' },
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/saved', label: 'Saved', icon: '🔖' },
 ];

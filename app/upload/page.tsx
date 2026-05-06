@@ -1,11 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function UploadPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [sound, setSound] = useState('');
+  const [contentWarning, setContentWarning] = useState(false);
+  const [duetOfId, setDuetOfId] = useState<number | null>(null);
+  const [duetInfo, setDuetInfo] = useState<{ username: string; title: string } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const duetId = params.get('duet');
+    if (duetId) {
+      setDuetOfId(parseInt(duetId));
+      fetch(`/api/videos/${duetId}/duet`, { method: 'POST' })
+        .then(r => r.json())
+        .then((d: { duet_of_username?: string; duet_of_title?: string }) => {
+          if (d.duet_of_username) setDuetInfo({ username: d.duet_of_username, title: d.duet_of_title || '' });
+        }).catch(() => {});
+    }
+  }, []);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -18,7 +35,7 @@ export default function UploadPage() {
     const res = await fetch('/api/videos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description, file_url: videoUrl }),
+      body: JSON.stringify({ title, description, file_url: videoUrl, content_warning: contentWarning, duet_of_id: duetOfId, sound: sound.trim() || undefined }),
     });
     if (res.ok) {
       setSuccess(true);
@@ -59,6 +76,17 @@ export default function UploadPage() {
         <p className="text-white/50">Share a short video with the Rival community. Enter it in Video Vote for a chance to win +2 points.</p>
       </div>
 
+      {/* Duet context banner */}
+      {duetInfo && (
+        <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 mb-5 flex items-center gap-3">
+          <span className="text-2xl">🎵</span>
+          <div>
+            <p className="text-purple-300 text-sm font-bold">Dueting @{duetInfo.username}</p>
+            <p className="text-white/40 text-xs truncate">{duetInfo.title}</p>
+          </div>
+        </div>
+      )}
+
       {/* Upload zone */}
       <div className="border-2 border-dashed border-white/10 hover:border-purple-500/40 rounded-2xl p-10 text-center mb-6 transition-colors group cursor-pointer bg-[#111111]">
         <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">🎬</div>
@@ -89,6 +117,16 @@ export default function UploadPage() {
         </div>
 
         <div>
+          <label className="text-white/70 text-sm font-medium block mb-2">Sound / Music (optional)</label>
+          <input
+            value={sound}
+            onChange={e => setSound(e.target.value.slice(0, 100))}
+            placeholder="Artist – Song Title or 'Original Sound'"
+            className="w-full bg-[#111111] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-purple-500/50 transition-colors"
+          />
+        </div>
+
+        <div>
           <label className="text-white/70 text-sm font-medium block mb-2">Description (optional)</label>
           <textarea
             value={description}
@@ -98,6 +136,19 @@ export default function UploadPage() {
           />
           <p className="text-white/30 text-xs mt-1 text-right">{description.length}/300</p>
         </div>
+
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div
+            onClick={() => setContentWarning(v => !v)}
+            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${contentWarning ? 'bg-orange-500 border-orange-500' : 'border-white/30 group-hover:border-white/50'}`}
+          >
+            {contentWarning && <span className="text-white text-xs font-bold">✓</span>}
+          </div>
+          <div>
+            <span className="text-white/70 text-sm font-medium">Sensitive content warning</span>
+            <p className="text-white/30 text-xs mt-0.5">Viewers must tap to reveal this video</p>
+          </div>
+        </label>
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl">

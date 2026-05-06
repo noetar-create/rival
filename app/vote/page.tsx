@@ -99,6 +99,13 @@ export default function VotePage() {
         </div>
       )}
 
+      {/* Legal notice */}
+      <div className="bg-white/3 border border-white/8 rounded-xl px-4 py-3 mb-6 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="text-green-400 text-xs font-bold">NO PURCHASE NECESSARY</span>
+        <span className="text-white/30 text-xs">Free to enter · 18+ · Void where prohibited</span>
+        <span className="text-white/30 text-xs">Winner = most community votes (creative merit). <a href="/rules" className="text-purple-400 hover:text-purple-300 underline">Full rules</a></span>
+      </div>
+
       {/* Entries */}
       <div className="space-y-3">
         <h2 className="text-white font-bold">Today&apos;s Entries</h2>

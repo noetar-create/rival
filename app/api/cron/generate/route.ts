@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -54,16 +53,17 @@ async function ensureSystemUser() {
 }
 
 async function generateScript(niche: typeof NICHES[0]): Promise<{ title: string; script: string; keyword: string }> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  console.log('[rival] generateScript using OpenAI gpt-4o-mini for:', niche.name);
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
     max_tokens: 400,
     messages: [{
       role: 'user',
       content: `${niche.prompt}\n\nIMPORTANT: Return raw JSON only, no markdown, no explanation.`
     }]
   });
-  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  const text = response.choices[0]?.message?.content ?? '';
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON in response');
   return JSON.parse(match[0]);
@@ -157,16 +157,16 @@ async function assembleVideo(
 }
 
 async function generateGames() {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
     max_tokens: 1500,
     messages: [{
       role: 'user',
       content: `Generate 5 trivia questions for a TikTok-style feed game. Make each one surprising, mind-blowing, or hard to believe. Mix these categories: science, history, geography, nature, space, food, animals, body, psychology, finance. Each question needs exactly 4 answer options with only 1 correct. Include a short fun fact (1 sentence) revealed after answering. Return a JSON array only, no markdown: [{"question":"...","options":["a","b","c","d"],"correct_index":0,"category":"science","fun_fact":"..."}]`
     }]
   });
-  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  const text = response.choices[0]?.message?.content ?? '';
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) return;
   const games = JSON.parse(match[0]) as Array<{ question: string; options: string[]; correct_index: number; category: string; fun_fact: string }>;
@@ -176,7 +176,7 @@ async function generateGames() {
 }
 
 async function runGeneration() {
-  const dataPath = process.env.DATA_PATH || path.join(process.cwd(), 'public');
+  const dataPath = process.env.DATA_PATH || process.cwd();
   const uploadDir = path.join(dataPath, 'uploads', 'videos');
   await mkdir(uploadDir, { recursive: true });
 
@@ -200,12 +200,12 @@ async function runGeneration() {
       await writeFile(audioPath, audioBuffer);
 
       const videoPath = path.join(uploadDir, `${baseName}.mp4`);
-      let fileUrl = `/uploads/videos/${baseName}.mp3`;
+      let fileUrl = `/api/uploads/videos/${baseName}.mp3`;
 
       try {
         await fetchStockVideo(keyword, stockPath);
         await assembleVideo(stockPath, audioPath, title, videoPath);
-        fileUrl = `/uploads/videos/${baseName}.mp4`;
+        fileUrl = `/api/uploads/videos/${baseName}.mp4`;
       } catch (err) {
         console.error('Video assembly failed, using audio only:', err);
       } finally {
@@ -213,7 +213,7 @@ async function runGeneration() {
       }
 
       const hashtags = `#${niche.name} #rival #compete`;
-      createVideo(systemUser.id, title, hashtags, fileUrl, '', hashtags);
+      createVideo(systemUser.id, title, script, fileUrl, '', hashtags);
     } catch (err) {
       console.error(`Generation error (${niche.name}):`, err);
       await unlink(stockPath).catch(() => {});

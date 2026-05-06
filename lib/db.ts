@@ -202,6 +202,96 @@ function initSchema() {
       FOREIGN KEY (blocker_id) REFERENCES users(id),
       FOREIGN KEY (blocked_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS reposts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(video_id, user_id),
+      FOREIGN KEY (video_id) REFERENCES videos(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS reactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      reaction_type TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(video_id, user_id, reaction_type),
+      FOREIGN KEY (video_id) REFERENCES videos(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_id INTEGER NOT NULL,
+      receiver_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (sender_id) REFERENCES users(id),
+      FOREIGN KEY (receiver_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS stories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      bg_color TEXT DEFAULT '#7c3aed',
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS story_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      story_id INTEGER NOT NULL,
+      viewer_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(story_id, viewer_id),
+      FOREIGN KEY (story_id) REFERENCES stories(id),
+      FOREIGN KEY (viewer_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS comment_likes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      comment_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(comment_id, user_id),
+      FOREIGN KEY (comment_id) REFERENCES comments(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS collections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS collection_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      collection_id INTEGER NOT NULL,
+      video_id INTEGER NOT NULL,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(collection_id, video_id),
+      FOREIGN KEY (collection_id) REFERENCES collections(id),
+      FOREIGN KEY (video_id) REFERENCES videos(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS watch_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id INTEGER NOT NULL,
+      user_id INTEGER,
+      seconds INTEGER NOT NULL,
+      source TEXT DEFAULT 'feed',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (video_id) REFERENCES videos(id)
+    );
   `);
 
   // Run migrations for existing databases
@@ -217,6 +307,16 @@ function runMigrations(database: Database.Database) {
     "ALTER TABLE videos ADD COLUMN hashtags TEXT",
     "ALTER TABLE videos ADD COLUMN flagged INTEGER DEFAULT 0",
     "ALTER TABLE videos ADD COLUMN moderated INTEGER DEFAULT 0",
+    "ALTER TABLE videos ADD COLUMN content_warning INTEGER DEFAULT 0",
+    "ALTER TABLE comments ADD COLUMN parent_id INTEGER",
+    "ALTER TABLE users ADD COLUMN bio TEXT",
+    "ALTER TABLE users ADD COLUMN display_name TEXT",
+    "ALTER TABLE users ADD COLUMN website TEXT",
+    "ALTER TABLE users ADD COLUMN is_private INTEGER DEFAULT 0",
+    "ALTER TABLE videos ADD COLUMN pinned INTEGER DEFAULT 0",
+    "ALTER TABLE videos ADD COLUMN duet_of_id INTEGER",
+    "ALTER TABLE videos ADD COLUMN sound TEXT",
+    "ALTER TABLE users ADD COLUMN milestone_sent TEXT",
   ];
 
   for (const migration of migrations) {
@@ -376,11 +476,11 @@ export function getUserVideos(userId: number) {
   `).all(userId) as VideoWithUser[];
 }
 
-export function createVideo(userId: number, title: string, description: string, fileUrl: string, thumbnailUrl: string, hashtags?: string) {
+export function createVideo(userId: number, title: string, description: string, fileUrl: string, thumbnailUrl: string, hashtags?: string, contentWarning = 0, duetOfId: number | null = null, sound?: string) {
   const database = getDb();
   return database.prepare(
-    'INSERT INTO videos (user_id, title, description, file_url, thumbnail_url, hashtags) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(userId, title, description, fileUrl, thumbnailUrl, hashtags || null);
+    'INSERT INTO videos (user_id, title, description, file_url, thumbnail_url, hashtags, content_warning, duet_of_id, sound) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(userId, title, description, fileUrl, thumbnailUrl, hashtags || null, contentWarning, duetOfId, sound || null);
 }
 
 export function createVideoFlagged(userId: number, title: string, description: string, fileUrl: string, thumbnailUrl: string, hashtags?: string) {
@@ -651,11 +751,12 @@ export function getForYouFeed(userId: number | null, limit = 20): VideoWithUser[
       FROM videos v
       JOIN users u ON v.user_id = u.id
       WHERE v.flagged = 0
+        AND (u.is_private = 0 OR v.user_id = ? OR EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND following_id = v.user_id))
         AND v.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = ?)
         AND v.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = ?)
       ORDER BY score DESC, RANDOM()
       LIMIT ?
-    `).all(userId, userId, userId, limit) as VideoWithUser[];
+    `).all(userId, userId, userId, userId, userId, limit) as VideoWithUser[];
   }
   return getTrendingFeed(limit);
 }
@@ -680,10 +781,114 @@ export function getTrendingFeed(limit = 20): VideoWithUser[] {
     FROM videos v
     JOIN users u ON v.user_id = u.id
     WHERE v.flagged = 0
+      AND u.is_private = 0
       AND v.created_at > datetime('now', '-48 hours')
     ORDER BY (v.likes * 3 + v.views) DESC
     LIMIT ?
   `).all(limit) as VideoWithUser[];
+}
+
+// ---- Reposts ----
+export function toggleRepost(videoId: number, userId: number): { reposted: boolean } {
+  const database = getDb();
+  const existing = database.prepare('SELECT id FROM reposts WHERE video_id = ? AND user_id = ?').get(videoId, userId);
+  if (existing) {
+    database.prepare('DELETE FROM reposts WHERE video_id = ? AND user_id = ?').run(videoId, userId);
+    return { reposted: false };
+  }
+  database.prepare('INSERT INTO reposts (video_id, user_id) VALUES (?, ?)').run(videoId, userId);
+  return { reposted: true };
+}
+
+export function getRepostCount(videoId: number): number {
+  const database = getDb();
+  return (database.prepare('SELECT COUNT(*) as c FROM reposts WHERE video_id = ?').get(videoId) as { c: number }).c;
+}
+
+// ---- Reactions ----
+export function toggleReaction(videoId: number, userId: number, reactionType: string): { reacted: boolean } {
+  const database = getDb();
+  const existing = database.prepare('SELECT id FROM reactions WHERE video_id = ? AND user_id = ? AND reaction_type = ?').get(videoId, userId, reactionType);
+  if (existing) {
+    database.prepare('DELETE FROM reactions WHERE video_id = ? AND user_id = ? AND reaction_type = ?').run(videoId, userId, reactionType);
+    return { reacted: false };
+  }
+  database.prepare('INSERT INTO reactions (video_id, user_id, reaction_type) VALUES (?, ?, ?)').run(videoId, userId, reactionType);
+  return { reacted: true };
+}
+
+export function getVideoReactions(videoId: number): Record<string, number> {
+  const database = getDb();
+  const rows = database.prepare('SELECT reaction_type, COUNT(*) as c FROM reactions WHERE video_id = ? GROUP BY reaction_type').all(videoId) as { reaction_type: string; c: number }[];
+  const result: Record<string, number> = {};
+  for (const r of rows) result[r.reaction_type] = r.c;
+  return result;
+}
+
+export function getUserReactions(videoId: number, userId: number): string[] {
+  const database = getDb();
+  return (database.prepare('SELECT reaction_type FROM reactions WHERE video_id = ? AND user_id = ?').all(videoId, userId) as { reaction_type: string }[]).map(r => r.reaction_type);
+}
+
+// ---- Comment Replies ----
+export function createReply(videoId: number, userId: number, content: string, parentId: number) {
+  const database = getDb();
+  database.prepare('INSERT INTO comments (video_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)').run(videoId, userId, content, parentId);
+}
+
+export function getVideoCommentsWithReplies(videoId: number): CommentWithUser[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT c.*, u.username, u.avatar_url, u.verified
+    FROM comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.video_id = ?
+    ORDER BY c.created_at ASC
+  `).all(videoId) as CommentWithUser[];
+}
+
+// ---- Analytics ----
+export function getCreatorAnalytics(userId: number) {
+  const database = getDb();
+  const videos = database.prepare(`
+    SELECT id, title, views, likes, download_count, created_at
+    FROM videos WHERE user_id = ? AND flagged = 0
+    ORDER BY views DESC
+  `).all(userId) as { id: number; title: string; views: number; likes: number; download_count: number; created_at: string }[];
+  const totalViews = videos.reduce((s, v) => s + v.views, 0);
+  const totalLikes = videos.reduce((s, v) => s + v.likes, 0);
+  const followerCount = getFollowerCount(userId);
+  const followingCount = getFollowingCount(userId);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const recentViews = videos.filter(v => v.created_at > weekAgo).reduce((s, v) => s + v.views, 0);
+  return { videos, totalViews, totalLikes, followerCount, followingCount, recentViews };
+}
+
+// ---- Recommended Creators ----
+export function getRecommendedCreators(userId: number | null, limit = 6) {
+  const database = getDb();
+  if (userId) {
+    return database.prepare(`
+      SELECT u.id, u.username, u.avatar_url, u.verified,
+        (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as follower_count,
+        (SELECT COUNT(*) FROM videos WHERE user_id = u.id AND flagged = 0) as video_count
+      FROM users u
+      WHERE u.id != ?
+        AND u.id NOT IN (SELECT following_id FROM follows WHERE follower_id = ?)
+        AND (SELECT COUNT(*) FROM videos WHERE user_id = u.id AND flagged = 0) > 0
+      ORDER BY follower_count DESC, video_count DESC
+      LIMIT ?
+    `).all(userId, userId, limit);
+  }
+  return database.prepare(`
+    SELECT u.id, u.username, u.avatar_url, u.verified,
+      (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as follower_count,
+      (SELECT COUNT(*) FROM videos WHERE user_id = u.id AND flagged = 0) as video_count
+    FROM users u
+    WHERE (SELECT COUNT(*) FROM videos WHERE user_id = u.id AND flagged = 0) > 0
+    ORDER BY follower_count DESC, video_count DESC
+    LIMIT ?
+  `).all(limit);
 }
 
 // ---- Reports & Blocks ----
@@ -694,6 +899,18 @@ export function createReport(videoId: number, userId: number, reason: string) {
     return { reported: true };
   } catch {
     return { reported: false, error: 'Already reported' };
+  }
+}
+
+export function checkReportThreshold(videoId: number) {
+  const database = getDb();
+  const row = database.prepare('SELECT COUNT(*) as cnt FROM reports WHERE video_id = ?').get(videoId) as { cnt: number };
+  if (row.cnt >= 5) {
+    const video = database.prepare('SELECT user_id, title FROM videos WHERE id = ? AND flagged = 0').get(videoId) as { user_id: number; title: string } | undefined;
+    if (video) {
+      database.prepare('UPDATE videos SET flagged = 1 WHERE id = ?').run(videoId);
+      createNotification(video.user_id, 'system', `Your video "${video.title}" has been temporarily hidden for review after receiving multiple reports.`);
+    }
   }
 }
 
@@ -779,7 +996,8 @@ export function getUserProfileByUsername(username: string): UserProfile | undefi
   const followerCount = getFollowerCount(user.id);
   const followingCount = getFollowingCount(user.id);
   const videoCount = (database.prepare('SELECT COUNT(*) as c FROM videos WHERE user_id = ? AND flagged = 0').get(user.id) as { c: number }).c;
-  return { ...user, follower_count: followerCount, following_count: followingCount, video_count: videoCount };
+  const pinnedVideo = getPinnedVideo(user.id) ?? null;
+  return { ...user, follower_count: followerCount, following_count: followingCount, video_count: videoCount, pinned_video: pinnedVideo };
 }
 
 // ---- Search ----
@@ -833,6 +1051,305 @@ export function upsertBlogPost(slug: string, title: string, excerpt: string, con
   `).run(slug, title, excerpt, content, author, readTime, title, excerpt, content, author, readTime);
 }
 
+// ---- Watch Events ----
+export function recordWatchEvent(videoId: number, userId: number | null, seconds: number, source: string) {
+  const database = getDb();
+  if (seconds < 1) return;
+  database.prepare('INSERT INTO watch_events (video_id, user_id, seconds, source) VALUES (?, ?, ?, ?)').run(videoId, userId, seconds, source);
+}
+
+export function getCreatorWatchAnalytics(userId: number): VideoWatchStat[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.id, v.title, v.views, v.likes, v.download_count, v.created_at,
+      ROUND(COALESCE(AVG(we.seconds), 0), 1) as avg_watch_seconds,
+      COUNT(we.id) as watch_events,
+      COALESCE(SUM(CASE WHEN we.source = 'feed' THEN 1 ELSE 0 END), 0) as from_feed,
+      COALESCE(SUM(CASE WHEN we.source = 'direct' THEN 1 ELSE 0 END), 0) as from_direct,
+      COALESCE(SUM(CASE WHEN we.source = 'profile' THEN 1 ELSE 0 END), 0) as from_profile,
+      COALESCE(SUM(CASE WHEN we.source = 'search' THEN 1 ELSE 0 END), 0) as from_search
+    FROM videos v
+    LEFT JOIN watch_events we ON we.video_id = v.id
+    WHERE v.user_id = ? AND v.flagged = 0
+    GROUP BY v.id
+    ORDER BY v.views DESC
+  `).all(userId) as VideoWatchStat[];
+}
+
+// ---- Follower Milestones ----
+const FOLLOWER_MILESTONES = [10, 100, 1000, 10000];
+
+export function checkFollowerMilestones(userId: number, followerCount: number) {
+  const database = getDb();
+  const user = database.prepare('SELECT milestone_sent FROM users WHERE id = ?').get(userId) as { milestone_sent: string | null };
+  const sent: number[] = user.milestone_sent ? JSON.parse(user.milestone_sent) : [];
+  let changed = false;
+  for (const m of FOLLOWER_MILESTONES) {
+    if (followerCount >= m && !sent.includes(m)) {
+      sent.push(m);
+      changed = true;
+      const label = m >= 1000 ? `${m / 1000}K` : m.toString();
+      createNotification(userId, 'milestone', `🎉 You hit ${label} followers! Keep creating!`);
+    }
+  }
+  if (changed) database.prepare('UPDATE users SET milestone_sent = ? WHERE id = ?').run(JSON.stringify(sent), userId);
+}
+
+// ---- Sounds ----
+export function getTrendingSounds(limit = 30): { sound: string; count: number }[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT sound, COUNT(*) as count
+    FROM videos
+    WHERE sound IS NOT NULL AND sound != '' AND flagged = 0
+    GROUP BY sound
+    ORDER BY count DESC
+    LIMIT ?
+  `).all(limit) as { sound: string; count: number }[];
+}
+
+export function getVideosBySound(sound: string, limit = 40): VideoWithUser[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v
+    JOIN users u ON v.user_id = u.id
+    WHERE v.sound = ? AND v.flagged = 0
+    ORDER BY v.views DESC
+    LIMIT ?
+  `).all(sound, limit) as VideoWithUser[];
+}
+
+// ---- Messages (DMs) ----
+export function sendMessage(senderId: number, receiverId: number, content: string) {
+  const database = getDb();
+  return database.prepare('INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)').run(senderId, receiverId, content);
+}
+
+export function getMessages(userId: number, otherUserId: number, limit = 100) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT m.*,
+      s.username as sender_username, s.avatar_url as sender_avatar,
+      r.username as receiver_username
+    FROM messages m
+    JOIN users s ON m.sender_id = s.id
+    JOIN users r ON m.receiver_id = r.id
+    WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
+    ORDER BY m.created_at ASC
+    LIMIT ?
+  `).all(userId, otherUserId, otherUserId, userId, limit) as MessageWithUser[];
+}
+
+export function getConversations(userId: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT
+      CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END as other_user_id,
+      u.username as other_username, u.avatar_url as other_avatar,
+      m.content as last_message, m.created_at as last_at,
+      SUM(CASE WHEN m.receiver_id = ? AND m.read = 0 THEN 1 ELSE 0 END) as unread_count
+    FROM messages m
+    JOIN users u ON u.id = CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END
+    WHERE m.sender_id = ? OR m.receiver_id = ?
+    GROUP BY other_user_id
+    ORDER BY last_at DESC
+  `).all(userId, userId, userId, userId, userId) as Conversation[];
+}
+
+export function markMessagesRead(userId: number, otherUserId: number) {
+  const database = getDb();
+  database.prepare('UPDATE messages SET read = 1 WHERE sender_id = ? AND receiver_id = ? AND read = 0').run(otherUserId, userId);
+}
+
+export function getUnreadMessageCount(userId: number): number {
+  const database = getDb();
+  return (database.prepare('SELECT COUNT(*) as c FROM messages WHERE receiver_id = ? AND read = 0').get(userId) as { c: number }).c;
+}
+
+// ---- Stories ----
+export function createStory(userId: number, content: string, bgColor: string) {
+  const database = getDb();
+  const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  return database.prepare('INSERT INTO stories (user_id, content, bg_color, expires_at) VALUES (?, ?, ?, ?)').run(userId, content, bgColor, expiresAt);
+}
+
+export function getStoriesForFeed(viewerId: number | null) {
+  const database = getDb();
+  if (viewerId) {
+    return database.prepare(`
+      SELECT s.*, u.username, u.avatar_url,
+        EXISTS(SELECT 1 FROM story_views WHERE story_id = s.id AND viewer_id = ?) as viewed
+      FROM stories s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.expires_at > datetime('now')
+        AND (s.user_id = ? OR s.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?))
+      ORDER BY viewed ASC, s.created_at DESC
+    `).all(viewerId, viewerId, viewerId) as StoryWithUser[];
+  }
+  return database.prepare(`
+    SELECT s.*, u.username, u.avatar_url, 0 as viewed
+    FROM stories s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.expires_at > datetime('now')
+    ORDER BY s.created_at DESC
+    LIMIT 20
+  `).all() as StoryWithUser[];
+}
+
+export function markStoryViewed(storyId: number, viewerId: number) {
+  const database = getDb();
+  try {
+    database.prepare('INSERT INTO story_views (story_id, viewer_id) VALUES (?, ?)').run(storyId, viewerId);
+  } catch { /* already viewed */ }
+}
+
+export function getMyStories(userId: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT s.*,
+      (SELECT COUNT(*) FROM story_views WHERE story_id = s.id) as view_count
+    FROM stories s
+    WHERE s.user_id = ? AND s.expires_at > datetime('now')
+    ORDER BY s.created_at DESC
+  `).all(userId) as (StoryWithUser & { view_count: number })[];
+}
+
+// ---- Comment Likes ----
+export function toggleCommentLike(commentId: number, userId: number): { liked: boolean } {
+  const database = getDb();
+  const existing = database.prepare('SELECT id FROM comment_likes WHERE comment_id = ? AND user_id = ?').get(commentId, userId);
+  if (existing) {
+    database.prepare('DELETE FROM comment_likes WHERE comment_id = ? AND user_id = ?').run(commentId, userId);
+    return { liked: false };
+  }
+  database.prepare('INSERT INTO comment_likes (comment_id, user_id) VALUES (?, ?)').run(commentId, userId);
+  return { liked: true };
+}
+
+export function getCommentLikeCounts(videoId: number): Record<number, number> {
+  const database = getDb();
+  const rows = database.prepare(`
+    SELECT cl.comment_id, COUNT(*) as c
+    FROM comment_likes cl
+    JOIN comments c ON cl.comment_id = c.id
+    WHERE c.video_id = ?
+    GROUP BY cl.comment_id
+  `).all(videoId) as { comment_id: number; c: number }[];
+  const result: Record<number, number> = {};
+  for (const r of rows) result[r.comment_id] = r.c;
+  return result;
+}
+
+// ---- Pinned Posts ----
+export function togglePinVideo(videoId: number, userId: number): { pinned: boolean } {
+  const database = getDb();
+  const video = database.prepare('SELECT id, pinned FROM videos WHERE id = ? AND user_id = ?').get(videoId, userId) as { id: number; pinned: number } | undefined;
+  if (!video) return { pinned: false };
+  if (video.pinned) {
+    database.prepare('UPDATE videos SET pinned = 0 WHERE id = ?').run(videoId);
+    return { pinned: false };
+  }
+  // Unpin any previously pinned video first
+  database.prepare('UPDATE videos SET pinned = 0 WHERE user_id = ?').run(userId);
+  database.prepare('UPDATE videos SET pinned = 1 WHERE id = ?').run(videoId);
+  return { pinned: true };
+}
+
+export function getPinnedVideo(userId: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v JOIN users u ON v.user_id = u.id
+    WHERE v.user_id = ? AND v.pinned = 1
+  `).get(userId) as VideoWithUser | undefined;
+}
+
+// ---- Collections ----
+export function createCollection(userId: number, name: string) {
+  const database = getDb();
+  return database.prepare('INSERT INTO collections (user_id, name) VALUES (?, ?)').run(userId, name);
+}
+
+export function getUserCollections(userId: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT c.*, COUNT(ci.id) as item_count
+    FROM collections c
+    LEFT JOIN collection_items ci ON ci.collection_id = c.id
+    WHERE c.user_id = ?
+    GROUP BY c.id
+    ORDER BY c.created_at DESC
+  `).all(userId) as CollectionWithCount[];
+}
+
+export function addToCollection(collectionId: number, videoId: number, userId: number): { added: boolean } {
+  const database = getDb();
+  const col = database.prepare('SELECT id FROM collections WHERE id = ? AND user_id = ?').get(collectionId, userId);
+  if (!col) return { added: false };
+  try {
+    database.prepare('INSERT INTO collection_items (collection_id, video_id) VALUES (?, ?)').run(collectionId, videoId);
+    return { added: true };
+  } catch { return { added: false }; }
+}
+
+export function removeFromCollection(collectionId: number, videoId: number, userId: number) {
+  const database = getDb();
+  database.prepare(`
+    DELETE FROM collection_items WHERE collection_id = ? AND video_id = ?
+    AND (SELECT user_id FROM collections WHERE id = ?) = ?
+  `).run(collectionId, videoId, collectionId, userId);
+}
+
+export function deleteCollection(collectionId: number, userId: number) {
+  const database = getDb();
+  const col = database.prepare('SELECT id FROM collections WHERE id = ? AND user_id = ?').get(collectionId, userId);
+  if (!col) return;
+  database.prepare('DELETE FROM collection_items WHERE collection_id = ?').run(collectionId);
+  database.prepare('DELETE FROM collections WHERE id = ?').run(collectionId);
+}
+
+export function getCollectionItems(collectionId: number, userId: number) {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified, ci.added_at
+    FROM collection_items ci
+    JOIN videos v ON ci.video_id = v.id
+    JOIN users u ON v.user_id = u.id
+    JOIN collections c ON ci.collection_id = c.id
+    WHERE ci.collection_id = ? AND (c.user_id = ? OR v.flagged = 0)
+    ORDER BY ci.added_at DESC
+  `).all(collectionId, userId) as VideoWithUser[];
+}
+
+// ---- Profile Editing ----
+export function updateUserProfile(userId: number, displayName: string | null, bio: string | null, website: string | null) {
+  const database = getDb();
+  database.prepare('UPDATE users SET display_name = ?, bio = ?, website = ? WHERE id = ?').run(displayName, bio, website, userId);
+}
+
+export function updateUserPassword(userId: number, newHash: string) {
+  const database = getDb();
+  database.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, userId);
+}
+
+export function updateUserPrivacy(userId: number, isPrivate: boolean) {
+  const database = getDb();
+  database.prepare('UPDATE users SET is_private = ? WHERE id = ?').run(isPrivate ? 1 : 0, userId);
+}
+
+// ---- Duets ----
+export function getDuetVideos(videoId: number): VideoWithUser[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v JOIN users u ON v.user_id = u.id
+    WHERE v.duet_of_id = ? AND v.flagged = 0
+    ORDER BY v.created_at DESC
+    LIMIT 20
+  `).all(videoId) as VideoWithUser[];
+}
+
 // ---- Types ----
 export interface User {
   id: number;
@@ -844,6 +1361,51 @@ export interface User {
   verified: number;
   referral_code: string | null;
   created_at: string;
+  bio?: string | null;
+  display_name?: string | null;
+  website?: string | null;
+  is_private?: number;
+}
+
+export interface MessageWithUser {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  content: string;
+  read: number;
+  created_at: string;
+  sender_username: string;
+  sender_avatar: string | null;
+  receiver_username: string;
+}
+
+export interface Conversation {
+  other_user_id: number;
+  other_username: string;
+  other_avatar: string | null;
+  last_message: string;
+  last_at: string;
+  unread_count: number;
+}
+
+export interface StoryWithUser {
+  id: number;
+  user_id: number;
+  content: string;
+  bg_color: string;
+  expires_at: string;
+  created_at: string;
+  username: string;
+  avatar_url: string | null;
+  viewed: number;
+}
+
+export interface CollectionWithCount {
+  id: number;
+  user_id: number;
+  name: string;
+  created_at: string;
+  item_count: number;
 }
 
 export interface VideoWithUser {
@@ -863,6 +1425,25 @@ export interface VideoWithUser {
   username: string;
   avatar_url: string | null;
   verified: number;
+  sound?: string | null;
+  content_warning?: number;
+  pinned?: number;
+  duet_of_id?: number | null;
+}
+
+export interface VideoWatchStat {
+  id: number;
+  title: string;
+  views: number;
+  likes: number;
+  download_count: number;
+  created_at: string;
+  avg_watch_seconds: number;
+  watch_events: number;
+  from_feed: number;
+  from_direct: number;
+  from_profile: number;
+  from_search: number;
 }
 
 export interface DailyStat {
@@ -939,6 +1520,7 @@ export interface CommentWithUser {
   video_id: number;
   user_id: number;
   content: string;
+  parent_id: number | null;
   created_at: string;
   username: string;
   avatar_url: string | null;
@@ -949,6 +1531,7 @@ export interface UserProfile extends User {
   follower_count: number;
   following_count: number;
   video_count: number;
+  pinned_video?: VideoWithUser | null;
 }
 
 export interface ReferralWithUser {

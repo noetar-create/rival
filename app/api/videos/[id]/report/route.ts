@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createReport } from '@/lib/db';
+import { createReport, checkReportThreshold } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 export async function POST(
@@ -11,6 +11,8 @@ export async function POST(
 
   const { id } = await params;
   const { reason } = await req.json() as { reason: string };
-  const result = createReport(parseInt(id), user.userId, reason ?? 'inappropriate');
+  const videoId = parseInt(id);
+  const result = createReport(videoId, user.userId, reason ?? 'inappropriate');
+  if (result.reported) checkReportThreshold(videoId);
   return Response.json(result);
 }

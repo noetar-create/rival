@@ -779,6 +779,10 @@ export default function GamesPage() {
         </div>
         <h1 className="text-3xl font-black text-white mb-2">Daily Games</h1>
         <p className="text-white/50">Play all 7 games today to unlock the 8-game bonus (+2 pts)</p>
+        <p className="text-white/30 text-xs mt-2">
+          NO PURCHASE NECESSARY · Skill-based · 18+ · Void where prohibited ·{' '}
+          <a href="/rules" className="text-purple-400 hover:text-purple-300 underline">Full rules</a>
+        </p>
 
         {todayWins.size > 0 && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">

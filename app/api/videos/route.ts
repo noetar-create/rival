@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const user = await getAuthUser();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { title, description, file_url, thumbnail_url, hashtags } = await request.json();
+  const { title, description, file_url, thumbnail_url, hashtags, content_warning, duet_of_id, sound } = await request.json();
   if (!title) return Response.json({ error: 'Title required' }, { status: 400 });
 
   // Run moderation check
@@ -59,6 +59,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   }
 
-  result = createVideo(user.userId, title, description || '', file_url || '', thumbnail_url || '', hashtags || null);
+  result = createVideo(user.userId, title, description || '', file_url || '', thumbnail_url || '', hashtags || null, content_warning ? 1 : 0, duet_of_id || null, sound || undefined);
   return Response.json({ success: true, id: result.lastInsertRowid, flagged: false }, { status: 201 });
 }

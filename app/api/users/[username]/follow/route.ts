@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { toggleFollow, getUserByUsername } from '@/lib/db';
+import { toggleFollow, getUserByUsername, createNotification, getFollowerCount, checkFollowerMilestones } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 export async function POST(
@@ -15,5 +15,10 @@ export async function POST(
   if (target.id === user.userId) return Response.json({ error: 'Cannot follow yourself' }, { status: 400 });
 
   const result = toggleFollow(user.userId, target.id);
+  if (result.following) {
+    createNotification(target.id, 'new_follower', `@${user.username} started following you.`);
+    const newCount = getFollowerCount(target.id);
+    checkFollowerMilestones(target.id, newCount);
+  }
   return Response.json(result);
 }

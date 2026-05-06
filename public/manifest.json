@@ -1,0 +1,18 @@
+{
+  "name": "Rival — Compete. Win. Repeat.",
+  "short_name": "Rival",
+  "description": "The competitive social platform. Post videos, play daily games, win prizes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#8B5CF6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["social", "entertainment", "games"]
+}

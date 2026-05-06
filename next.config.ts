@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 
+// build: 2026-05-06
 const nextConfig: NextConfig = {
   async headers() {
     return [

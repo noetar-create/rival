@@ -1,5 +1,6 @@
 node_modules
 .next
+rival.db
 rival.db-shm
 rival.db-wal
 public/uploads

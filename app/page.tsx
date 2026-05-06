@@ -4,6 +4,7 @@ import { getVideos, getFeedGames } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 import VideoCard from '@/components/VideoCard';
 import VideoFeed from '@/components/VideoFeed';
+import StoriesBar from '@/components/StoriesBar';
 
 export const metadata: Metadata = {
   title: 'Rival — Compete. Win. Repeat.',
@@ -54,6 +55,11 @@ export default function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
+      {/* Stories bar */}
+      <div className="border-b border-white/5">
+        <StoriesBar />
+      </div>
 
       {/* TikTok-style vertical video feed with inline games */}
       <VideoFeed videos={videos} games={games} />

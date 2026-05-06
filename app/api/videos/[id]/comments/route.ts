@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getVideoComments, createComment } from '@/lib/db';
+import { getVideoCommentsWithReplies, createComment, createReply, getVideoById, createNotification } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const comments = getVideoComments(parseInt(id));
+  const comments = getVideoCommentsWithReplies(parseInt(id));
   return Response.json(comments);
 }
 
@@ -19,9 +19,18 @@ export async function POST(
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const { content } = await req.json() as { content: string };
+  const { content, parent_id } = await req.json() as { content: string; parent_id?: number };
   if (!content?.trim()) return Response.json({ error: 'Empty comment' }, { status: 400 });
 
-  createComment(parseInt(id), user.userId, content.trim());
+  const videoId = parseInt(id);
+  if (parent_id) {
+    createReply(videoId, user.userId, content.trim(), parent_id);
+  } else {
+    createComment(videoId, user.userId, content.trim());
+    const video = getVideoById(videoId);
+    if (video && video.user_id !== user.userId) {
+      createNotification(video.user_id, 'new_comment', `@${user.username} commented on your video "${video.title.slice(0, 40)}"`);
+    }
+  }
   return Response.json({ ok: true });
 }
