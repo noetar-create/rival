@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+import OpenAI from 'openai';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, mkdir, unlink } from 'fs/promises';
@@ -27,11 +27,7 @@ const NICHES = [
   { name: 'self_improvement', prompt: 'Write a viral TikTok-style 60-second voiceover script about a stoicism or self-improvement insight that actually changes behavior — specific, not generic. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
 ];
 
-const VOICES = [
-  'JBFqnCBsd6RMkjVDRZzb', // George
-  'EXAVITQu4vr4xnSDxMaL', // Sarah
-  'TX3LPaxmHKxFdv7VOQHJ', // Liam
-];
+const VOICES = ['onyx', 'nova', 'alloy', 'echo', 'fable', 'shimmer'] as const;
 
 async function ensureSystemUser() {
   const { getUserByEmail, createUser } = await import('@/lib/db');
@@ -61,21 +57,15 @@ async function generateScript(niche: typeof NICHES[0]): Promise<{ title: string;
   return JSON.parse(match[0]);
 }
 
-async function generateAudio(script: string, voiceId: string): Promise<Buffer> {
-  const client = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
-  const audio = await client.textToSpeech.convert(voiceId, {
-    text: script,
-    modelId: 'eleven_multilingual_v2',
-    outputFormat: 'mp3_44100_128',
+async function generateAudio(script: string, voice: string): Promise<Buffer> {
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const response = await client.audio.speech.create({
+    model: 'tts-1',
+    voice: voice as 'onyx' | 'nova' | 'alloy' | 'echo' | 'fable' | 'shimmer',
+    input: script,
+    response_format: 'mp3',
   });
-  const chunks: Uint8Array[] = [];
-  const reader = (audio as unknown as ReadableStream<Uint8Array>).getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) chunks.push(value);
-  }
-  return Buffer.concat(chunks);
+  return Buffer.from(await response.arrayBuffer());
 }
 
 interface PexelsVideoFile {
