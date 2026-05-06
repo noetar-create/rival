@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import GameSlide from './GameSlide';
+import PromoSlide, { PROMOS } from './PromoSlide';
 import type { FeedGame } from '@/lib/db';
 
 interface FeedVideo {
@@ -243,7 +244,8 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
 
 type FeedItem =
   | { type: 'video'; data: FeedVideo }
-  | { type: 'game'; data: FeedGame };
+  | { type: 'game'; data: FeedGame }
+  | { type: 'promo'; data: typeof PROMOS[0] };
 
 interface VideoFeedProps {
   videos: FeedVideo[];
@@ -255,13 +257,18 @@ export default function VideoFeed({ videos, games }: VideoFeedProps) {
   const [muted, setMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Mix games into feed every 5 videos
+  // Mix games (every 5 videos) and promos (every 10 videos) into feed
   const feedItems: FeedItem[] = [];
   let gameIdx = 0;
+  let promoIdx = 0;
   for (let i = 0; i < videos.length; i++) {
     feedItems.push({ type: 'video', data: videos[i] });
-    if ((i + 1) % 5 === 0 && gameIdx < games.length) {
+    const pos = i + 1;
+    if (pos % 10 === 5 && gameIdx < games.length) {
       feedItems.push({ type: 'game', data: games[gameIdx++] });
+    } else if (pos % 10 === 0) {
+      feedItems.push({ type: 'promo', data: PROMOS[promoIdx % PROMOS.length] });
+      promoIdx++;
     }
   }
 
@@ -290,8 +297,10 @@ export default function VideoFeed({ videos, games }: VideoFeedProps) {
       {feedItems.map((item, i) =>
         item.type === 'video' ? (
           <VideoSlide key={`v-${item.data.id}`} video={item.data} isActive={i === activeIndex} muted={muted} setMuted={setMuted} />
-        ) : (
+        ) : item.type === 'game' ? (
           <GameSlide key={`g-${item.data.id}`} game={item.data} isActive={i === activeIndex} />
+        ) : (
+          <PromoSlide key={`p-${item.data.name}`} promo={item.data} />
         )
       )}
     </div>
