@@ -66,6 +66,11 @@ export default function Navbar() {
         <Link href="/login" className="block w-full text-center py-2 px-4 text-white/60 hover:text-white text-sm transition-colors duration-200">
           Log In
         </Link>
+        <div className="flex justify-center gap-3 pt-2">
+          <Link href="/about" className="text-white/30 hover:text-white/60 text-xs transition-colors">About</Link>
+          <Link href="/privacy" className="text-white/30 hover:text-white/60 text-xs transition-colors">Privacy</Link>
+          <Link href="/terms" className="text-white/30 hover:text-white/60 text-xs transition-colors">Terms</Link>
+        </div>
       </div>
     </aside>
   );
