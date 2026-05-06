@@ -436,208 +436,222 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
     } catch {}
   };
 
-  return (
-    <div className="relative w-full h-screen snap-start snap-always flex-shrink-0 bg-black flex items-center justify-center overflow-hidden">
-      <div className="relative h-full mx-auto overflow-hidden" style={{ width: 'min(100%, calc(100vh * 9 / 16))' }}>
-        {/* Gradient background always visible — shows while video buffers or if no file */}
-        <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center`} onClick={handleVideoClick}>
-          <div className="text-center px-8">
-            <div className="text-6xl mb-4">🎬</div>
-            <p className="text-white text-xl font-bold leading-snug max-w-sm">{video.title}</p>
-          </div>
+  const actionButtons = (
+    <>
+      <button onClick={handleLike} className="flex flex-col items-center gap-1">
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${liked ? 'bg-pink-500/30' : 'bg-black/40'}`}>
+          <svg className={`w-6 h-6 ${liked ? 'text-pink-400' : 'text-white'}`} fill={liked ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
         </div>
-        {video.file_url && (
-          <video
-            ref={videoRef}
-            src={video.file_url}
-            poster={video.thumbnail_url ?? undefined}
-            preload="metadata"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
-            loop
-            playsInline
-            onClick={handleVideoClick}
-            onCanPlay={() => setVideoReady(true)}
-          />
-        )}
+        <span className="text-white text-xs font-semibold">{formatNum(likeCount)}</span>
+      </button>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+      <button onClick={() => setShowComments(true)} className="flex flex-col items-center gap-1">
+        <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
+          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </div>
+        <span className="text-white text-xs font-semibold">Comment</span>
+      </button>
 
-        {/* Content warning overlay */}
-        {video.content_warning === 1 && !cwRevealed && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-10 flex flex-col items-center justify-center gap-4">
-            <div className="text-4xl">⚠️</div>
-            <p className="text-white font-bold text-center px-8">Sensitive content</p>
-            <p className="text-white/50 text-sm text-center px-10">This video may contain content some viewers find disturbing.</p>
-            <button
-              onClick={() => setCwRevealed(true)}
-              className="px-6 py-2.5 bg-white/20 hover:bg-white/30 text-white font-semibold rounded-full transition-colors"
-            >
-              Tap to reveal
-            </button>
-          </div>
-        )}
+      <button onClick={handleShare} className="flex flex-col items-center gap-1">
+        <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
+          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+        </div>
+        <span className="text-white text-xs font-semibold">Share</span>
+      </button>
 
-        {/* Pause flash */}
-        {showPauseIcon && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center animate-ping-once">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-              </svg>
+      <button onClick={handleRepost} className="flex flex-col items-center gap-1">
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${reposted ? 'bg-green-500/30' : 'bg-black/40'}`}>
+          <svg className={`w-6 h-6 ${reposted ? 'text-green-400' : 'text-white'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+        <span className={`text-xs font-semibold ${reposted ? 'text-green-400' : 'text-white'}`}>Repost</span>
+      </button>
+
+      <button onClick={handleBookmark} className="flex flex-col items-center gap-1">
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${bookmarked ? 'bg-purple-500/30' : 'bg-black/40'}`}>
+          <svg className={`w-6 h-6 ${bookmarked ? 'text-purple-400' : 'text-white'}`} fill={bookmarked ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </div>
+        <span className="text-white text-xs font-semibold">Save</span>
+      </button>
+
+      <button onClick={handleDownload} className="flex flex-col items-center gap-1">
+        <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
+          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </div>
+        <span className="text-white text-xs font-semibold">Download</span>
+      </button>
+
+      <a href={`/upload?duet=${video.id}`} className="flex flex-col items-center gap-1">
+        <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
+          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+        </div>
+        <span className="text-white text-xs font-semibold">Duet</span>
+      </a>
+    </>
+  );
+
+  return (
+    <div className="relative w-full h-screen snap-start snap-always flex-shrink-0 bg-black flex items-center justify-center">
+      {/* On desktop: video card + action buttons sit side-by-side, aligned to bottom */}
+      <div className="flex items-end h-full">
+        {/* Video card — portrait aspect ratio scales with screen height */}
+        <div
+          className="relative h-full overflow-hidden"
+          style={{ aspectRatio: '9/16' }}
+        >
+          {/* Gradient background always visible — shows while video buffers or if no file */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center`} onClick={handleVideoClick}>
+            <div className="text-center px-8">
+              <div className="text-6xl mb-4">🎬</div>
+              <p className="text-white text-xl font-bold leading-snug max-w-sm">{video.title}</p>
             </div>
           </div>
-        )}
+          {video.file_url && (
+            <video
+              ref={videoRef}
+              src={video.file_url}
+              poster={video.thumbnail_url ?? undefined}
+              preload="metadata"
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+              loop
+              playsInline
+              onClick={handleVideoClick}
+              onCanPlay={() => setVideoReady(true)}
+            />
+          )}
 
-        {/* ⋯ menu button */}
-        <button
-          onClick={() => setShowMenu(true)}
-          className="absolute top-4 left-4 z-10 w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-white/70 hover:text-white"
-        >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-          </svg>
-        </button>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
 
-        {/* Mute button */}
-        {video.file_url && muted && (
-          <button onClick={() => setMuted(false)} className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full z-10 hover:bg-black/80 transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-            </svg>
-            Tap for sound
-          </button>
-        )}
-
-        {/* Bottom info */}
-        <div className="absolute bottom-0 left-0 right-16 p-5 pb-6 pointer-events-none">
-          <div className="flex items-center gap-2 mb-2 pointer-events-auto flex-wrap">
-            <Link href={`/profile/${video.username}`} className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold text-white shrink-0">
-              {video.username[0]?.toUpperCase()}
-            </Link>
-            <Link href={`/profile/${video.username}`} className="text-white font-semibold text-sm hover:text-purple-300">@{video.username}</Link>
-            {video.verified === 1 && <span className="text-blue-400 text-xs font-bold bg-blue-400/20 px-1.5 py-0.5 rounded-full">✓</span>}
-            <button onClick={handleFollow} className={`text-xs font-bold px-2.5 py-1 rounded-full border transition-colors ${following ? 'border-white/30 text-white/60' : 'border-purple-400 text-purple-400 hover:bg-purple-400/10'}`}>
-              {following ? 'Following' : '+ Follow'}
-            </button>
-          </div>
-          <h3 className="text-white font-bold text-base leading-snug mb-2 line-clamp-2">{video.title}</h3>
-          {/* Reactions row */}
-          <div className="flex gap-1.5 mb-2 pointer-events-auto flex-wrap">
-            {REACTIONS.map(r => (
+          {/* Content warning overlay */}
+          {video.content_warning === 1 && !cwRevealed && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-10 flex flex-col items-center justify-center gap-4">
+              <div className="text-4xl">⚠️</div>
+              <p className="text-white font-bold text-center px-8">Sensitive content</p>
+              <p className="text-white/50 text-sm text-center px-10">This video may contain content some viewers find disturbing.</p>
               <button
-                key={r.type}
-                onClick={() => handleReact(r.type)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
-                  userReaction === r.type
-                    ? 'bg-purple-500/50 text-white border border-purple-400/60'
-                    : 'bg-black/40 text-white/80 hover:bg-black/60'
-                }`}
+                onClick={() => setCwRevealed(true)}
+                className="px-6 py-2.5 bg-white/20 hover:bg-white/30 text-white font-semibold rounded-full transition-colors"
               >
-                <span>{r.emoji}</span>
-                {(reactionCounts[r.type] ?? 0) > 0 && (
-                  <span>{formatNum(reactionCounts[r.type])}</span>
-                )}
+                Tap to reveal
               </button>
-            ))}
-          </div>
-          {allHashtags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pointer-events-auto">
-              {allHashtags.slice(0, 5).map(tag => (
-                <Link key={tag} href={`/hashtag/${tag.replace('#', '')}`} className="text-purple-300 text-sm font-medium hover:text-purple-200">
-                  {tag}
-                </Link>
+            </div>
+          )}
+
+          {/* Pause flash */}
+          {showPauseIcon && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+              <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center animate-ping-once">
+                <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                </svg>
+              </div>
+            </div>
+          )}
+
+          {/* ⋯ menu button */}
+          <button
+            onClick={() => setShowMenu(true)}
+            className="absolute top-4 left-4 z-10 w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-white/70 hover:text-white"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+            </svg>
+          </button>
+
+          {/* Mute button */}
+          {video.file_url && muted && (
+            <button onClick={() => setMuted(false)} className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full z-10 hover:bg-black/80 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+              Tap for sound
+            </button>
+          )}
+
+          {/* Bottom info — on mobile leaves room on right for overlaid buttons */}
+          <div className="absolute bottom-0 left-0 right-16 md:right-4 p-5 pb-6 pointer-events-none">
+            <div className="flex items-center gap-2 mb-2 pointer-events-auto flex-wrap">
+              <Link href={`/profile/${video.username}`} className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                {video.username[0]?.toUpperCase()}
+              </Link>
+              <Link href={`/profile/${video.username}`} className="text-white font-semibold text-sm hover:text-purple-300">@{video.username}</Link>
+              {video.verified === 1 && <span className="text-blue-400 text-xs font-bold bg-blue-400/20 px-1.5 py-0.5 rounded-full">✓</span>}
+              <button onClick={handleFollow} className={`text-xs font-bold px-2.5 py-1 rounded-full border transition-colors ${following ? 'border-white/30 text-white/60' : 'border-purple-400 text-purple-400 hover:bg-purple-400/10'}`}>
+                {following ? 'Following' : '+ Follow'}
+              </button>
+            </div>
+            <h3 className="text-white font-bold text-base leading-snug mb-2 line-clamp-2">{video.title}</h3>
+            <div className="flex gap-1.5 mb-2 pointer-events-auto flex-wrap">
+              {REACTIONS.map(r => (
+                <button
+                  key={r.type}
+                  onClick={() => handleReact(r.type)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                    userReaction === r.type
+                      ? 'bg-purple-500/50 text-white border border-purple-400/60'
+                      : 'bg-black/40 text-white/80 hover:bg-black/60'
+                  }`}
+                >
+                  <span>{r.emoji}</span>
+                  {(reactionCounts[r.type] ?? 0) > 0 && (
+                    <span>{formatNum(reactionCounts[r.type])}</span>
+                  )}
+                </button>
               ))}
             </div>
-          )}
-          {video.sound && (
-            <Link
-              href={`/sound/${encodeURIComponent(video.sound)}`}
-              className="flex items-center gap-1.5 mt-2 pointer-events-auto"
-            >
-              <span className="text-white/60 text-xs">♫</span>
-              <span className="text-white/60 text-xs truncate hover:text-white/80">{video.sound}</span>
-            </Link>
-          )}
-        </div>
-
-        {/* Right actions */}
-        <div className="absolute right-3 bottom-16 flex flex-col items-center gap-5">
-          <button onClick={handleLike} className="flex flex-col items-center gap-1">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${liked ? 'bg-pink-500/30' : 'bg-black/40'}`}>
-              <svg className={`w-6 h-6 ${liked ? 'text-pink-400' : 'text-white'}`} fill={liked ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </div>
-            <span className="text-white text-xs font-semibold">{formatNum(likeCount)}</span>
-          </button>
-
-          <button onClick={() => setShowComments(true)} className="flex flex-col items-center gap-1">
-            <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
-            <span className="text-white text-xs font-semibold">Comment</span>
-          </button>
-
-          <button onClick={handleShare} className="flex flex-col items-center gap-1">
-            <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-            </div>
-            <span className="text-white text-xs font-semibold">Share</span>
-          </button>
-
-          <button onClick={handleRepost} className="flex flex-col items-center gap-1">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${reposted ? 'bg-green-500/30' : 'bg-black/40'}`}>
-              <svg className={`w-6 h-6 ${reposted ? 'text-green-400' : 'text-white'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </div>
-            <span className={`text-xs font-semibold ${reposted ? 'text-green-400' : 'text-white'}`}>Repost</span>
-          </button>
-
-          <button onClick={handleBookmark} className="flex flex-col items-center gap-1">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${bookmarked ? 'bg-purple-500/30' : 'bg-black/40'}`}>
-              <svg className={`w-6 h-6 ${bookmarked ? 'text-purple-400' : 'text-white'}`} fill={bookmarked ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-              </svg>
-            </div>
-            <span className="text-white text-xs font-semibold">Save</span>
-          </button>
-
-          <button onClick={handleDownload} className="flex flex-col items-center gap-1">
-            <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </div>
-            <span className="text-white text-xs font-semibold">Download</span>
-          </button>
-
-          <a
-            href={`/upload?duet=${video.id}`}
-            className="flex flex-col items-center gap-1"
-          >
-            <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-              </svg>
-            </div>
-            <span className="text-white text-xs font-semibold">Duet</span>
-          </a>
-        </div>
-
-        {/* Toast */}
-        {toast && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-white/90 text-black text-sm font-semibold px-4 py-2 rounded-full shadow-lg z-10 whitespace-nowrap">
-            {toast}
+            {allHashtags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pointer-events-auto">
+                {allHashtags.slice(0, 5).map(tag => (
+                  <Link key={tag} href={`/hashtag/${tag.replace('#', '')}`} className="text-purple-300 text-sm font-medium hover:text-purple-200">
+                    {tag}
+                  </Link>
+                ))}
+              </div>
+            )}
+            {video.sound && (
+              <Link
+                href={`/sound/${encodeURIComponent(video.sound)}`}
+                className="flex items-center gap-1.5 mt-2 pointer-events-auto"
+              >
+                <span className="text-white/60 text-xs">♫</span>
+                <span className="text-white/60 text-xs truncate hover:text-white/80">{video.sound}</span>
+              </Link>
+            )}
           </div>
-        )}
 
-        {showComments && <CommentDrawer videoId={video.id} onClose={() => setShowComments(false)} />}
-        {showMenu && <ReportMenu videoId={video.id} username={video.username} onClose={() => setShowMenu(false)} />}
+          {/* Mobile-only: action buttons overlaid on right side of video */}
+          <div className="md:hidden absolute right-3 bottom-16 flex flex-col items-center gap-5">
+            {actionButtons}
+          </div>
+
+          {/* Toast */}
+          {toast && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-white/90 text-black text-sm font-semibold px-4 py-2 rounded-full shadow-lg z-10 whitespace-nowrap">
+              {toast}
+            </div>
+          )}
+
+          {showComments && <CommentDrawer videoId={video.id} onClose={() => setShowComments(false)} />}
+          {showMenu && <ReportMenu videoId={video.id} username={video.username} onClose={() => setShowMenu(false)} />}
+        </div>
+
+        {/* Desktop-only: action buttons to the right of the video card */}
+        <div className="hidden md:flex flex-col items-center gap-5 pb-20 px-4 shrink-0">
+          {actionButtons}
+        </div>
       </div>
     </div>
   );
