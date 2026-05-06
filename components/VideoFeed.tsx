@@ -244,7 +244,7 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
 
 type FeedItem =
   | { type: 'video'; data: FeedVideo }
-  | { type: 'game'; data: FeedGame }
+  | { type: 'game' }
   | { type: 'promo'; data: typeof PROMOS[0] };
 
 interface VideoFeedProps {
@@ -259,18 +259,20 @@ export default function VideoFeed({ videos, games }: VideoFeedProps) {
 
   // Mix games (every 5 videos) and promos (every 10 videos) into feed
   const feedItems: FeedItem[] = [];
-  let gameIdx = 0;
   let promoIdx = 0;
+  let gameCount = 0;
   for (let i = 0; i < videos.length; i++) {
     feedItems.push({ type: 'video', data: videos[i] });
     const pos = i + 1;
-    if (pos % 10 === 5 && gameIdx < games.length) {
-      feedItems.push({ type: 'game', data: games[gameIdx++] });
+    if (pos % 10 === 5 && games.length > 0) {
+      feedItems.push({ type: 'game' });
+      gameCount++;
     } else if (pos % 10 === 0) {
       feedItems.push({ type: 'promo', data: PROMOS[promoIdx % PROMOS.length] });
       promoIdx++;
     }
   }
+  void gameCount;
 
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
@@ -298,7 +300,7 @@ export default function VideoFeed({ videos, games }: VideoFeedProps) {
         item.type === 'video' ? (
           <VideoSlide key={`v-${item.data.id}`} video={item.data} isActive={i === activeIndex} muted={muted} setMuted={setMuted} />
         ) : item.type === 'game' ? (
-          <GameSlide key={`g-${item.data.id}`} game={item.data} isActive={i === activeIndex} />
+          <GameSlide key={`g-${i}`} games={games} isActive={i === activeIndex} />
         ) : (
           <PromoSlide key={`p-${item.data.name}`} promo={item.data} />
         )
