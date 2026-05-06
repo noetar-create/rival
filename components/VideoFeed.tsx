@@ -60,12 +60,14 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
     const v = videoRef.current;
     if (!v) return;
     if (isActive) {
-      v.muted = muted;
-      v.play().catch(() => {});
+      v.muted = true;
+      v.play()
+        .then(() => { v.muted = muted; })
+        .catch(() => {});
     } else {
       v.pause();
     }
-  }, [isActive, muted]);
+  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = muted;
@@ -128,9 +130,8 @@ function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
           src={video.file_url}
           className="absolute inset-0 w-full h-full object-cover"
           loop
-          muted
           playsInline
-          onClick={() => setMuted(m => !m)}
+          onClick={() => setMuted(!muted)}
         />
       ) : (
         <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center`}>
