@@ -5,10 +5,10 @@ import { usePathname } from 'next/navigation';
 
 const mobileItems = [
   { href: '/', label: 'Home', icon: '🏠' },
-  { href: '/games', label: 'Games', icon: '🎮' },
+  { href: '/search', label: 'Search', icon: '🔍' },
   { href: '/upload', label: 'Upload', icon: '⬆️' },
   { href: '/leaderboard', label: 'Ranks', icon: '🏆' },
-  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { href: '/dashboard', label: 'Me', icon: '👤' },
 ];
 
 export default function MobileNav() {

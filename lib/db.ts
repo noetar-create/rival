@@ -161,6 +161,26 @@ function initSchema() {
       fun_fact TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (video_id) REFERENCES videos(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS follows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      follower_id INTEGER NOT NULL,
+      following_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(follower_id, following_id),
+      FOREIGN KEY (follower_id) REFERENCES users(id),
+      FOREIGN KEY (following_id) REFERENCES users(id)
+    );
   `);
 
   // Run migrations for existing databases
@@ -595,6 +615,87 @@ export function awardVerifiedBadgesToTopThree() {
   }
 }
 
+// ---- Views ----
+export function incrementViews(videoId: number) {
+  const database = getDb();
+  database.prepare('UPDATE videos SET views = views + 1 WHERE id = ?').run(videoId);
+}
+
+// ---- Comments ----
+export function createComment(videoId: number, userId: number, content: string) {
+  const database = getDb();
+  database.prepare('INSERT INTO comments (video_id, user_id, content) VALUES (?, ?, ?)').run(videoId, userId, content);
+}
+
+export function getVideoComments(videoId: number, limit = 50): CommentWithUser[] {
+  const database = getDb();
+  return database.prepare(`
+    SELECT c.*, u.username, u.avatar_url, u.verified
+    FROM comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.video_id = ?
+    ORDER BY c.created_at DESC
+    LIMIT ?
+  `).all(videoId, limit) as CommentWithUser[];
+}
+
+// ---- Follows ----
+export function toggleFollow(followerId: number, followingId: number): { following: boolean } {
+  const database = getDb();
+  const existing = database.prepare('SELECT id FROM follows WHERE follower_id = ? AND following_id = ?').get(followerId, followingId);
+  if (existing) {
+    database.prepare('DELETE FROM follows WHERE follower_id = ? AND following_id = ?').run(followerId, followingId);
+    return { following: false };
+  } else {
+    database.prepare('INSERT INTO follows (follower_id, following_id) VALUES (?, ?)').run(followerId, followingId);
+    return { following: true };
+  }
+}
+
+export function isFollowing(followerId: number, followingId: number): boolean {
+  const database = getDb();
+  return !!database.prepare('SELECT id FROM follows WHERE follower_id = ? AND following_id = ?').get(followerId, followingId);
+}
+
+export function getFollowerCount(userId: number): number {
+  const database = getDb();
+  return (database.prepare('SELECT COUNT(*) as c FROM follows WHERE following_id = ?').get(userId) as { c: number }).c;
+}
+
+export function getFollowingCount(userId: number): number {
+  const database = getDb();
+  return (database.prepare('SELECT COUNT(*) as c FROM follows WHERE follower_id = ?').get(userId) as { c: number }).c;
+}
+
+export function getUserProfileByUsername(username: string): UserProfile | undefined {
+  const database = getDb();
+  const user = database.prepare('SELECT * FROM users WHERE username = ?').get(username) as User | undefined;
+  if (!user) return undefined;
+  const followerCount = getFollowerCount(user.id);
+  const followingCount = getFollowingCount(user.id);
+  const videoCount = (database.prepare('SELECT COUNT(*) as c FROM videos WHERE user_id = ? AND flagged = 0').get(user.id) as { c: number }).c;
+  return { ...user, follower_count: followerCount, following_count: followingCount, video_count: videoCount };
+}
+
+// ---- Search ----
+export function searchVideos(query: string, limit = 20): VideoWithUser[] {
+  const database = getDb();
+  const q = `%${query}%`;
+  return database.prepare(`
+    SELECT v.*, u.username, u.avatar_url, u.verified
+    FROM videos v
+    JOIN users u ON v.user_id = u.id
+    WHERE v.flagged = 0 AND (v.title LIKE ? OR v.description LIKE ? OR v.hashtags LIKE ?)
+    ORDER BY v.likes DESC
+    LIMIT ?
+  `).all(q, q, q, limit) as VideoWithUser[];
+}
+
+export function searchUsers(query: string, limit = 10): User[] {
+  const database = getDb();
+  return database.prepare('SELECT * FROM users WHERE username LIKE ? LIMIT ?').all(`%${query}%`, limit) as User[];
+}
+
 // ---- Feed Games ----
 export function createFeedGame(question: string, options: string[], correctIndex: number, category: string, funFact: string) {
   const database = getDb();
@@ -726,6 +827,23 @@ export interface Notification {
   message: string;
   read: number;
   created_at: string;
+}
+
+export interface CommentWithUser {
+  id: number;
+  video_id: number;
+  user_id: number;
+  content: string;
+  created_at: string;
+  username: string;
+  avatar_url: string | null;
+  verified: number;
+}
+
+export interface UserProfile extends User {
+  follower_count: number;
+  following_count: number;
+  video_count: number;
 }
 
 export interface ReferralWithUser {
