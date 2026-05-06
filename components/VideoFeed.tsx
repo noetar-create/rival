@@ -42,14 +42,15 @@ function formatNum(n: number) {
 interface VideoSlideProps {
   video: FeedVideo;
   isActive: boolean;
+  muted: boolean;
+  setMuted: (m: boolean) => void;
 }
 
-function VideoSlide({ video, isActive }: VideoSlideProps) {
+function VideoSlide({ video, isActive, muted, setMuted }: VideoSlideProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(video.likes);
   const [bookmarked, setBookmarked] = useState(false);
-  const [muted, setMuted] = useState(true);
   const [toast, setToast] = useState('');
 
   const allHashtags = extractHashtags(video.hashtags || video.description);
@@ -59,13 +60,12 @@ function VideoSlide({ video, isActive }: VideoSlideProps) {
     const v = videoRef.current;
     if (!v) return;
     if (isActive) {
-      v.muted = true;
+      v.muted = muted;
       v.play().catch(() => {});
     } else {
       v.pause();
-      setMuted(true);
     }
-  }, [isActive]);
+  }, [isActive, muted]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = muted;
@@ -244,6 +244,7 @@ interface VideoFeedProps {
 
 export default function VideoFeed({ videos }: VideoFeedProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [muted, setMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = useCallback(() => {
@@ -274,7 +275,7 @@ export default function VideoFeed({ videos }: VideoFeedProps) {
       }}
     >
       {videos.map((video, i) => (
-        <VideoSlide key={video.id} video={video} isActive={i === activeIndex} />
+        <VideoSlide key={video.id} video={video} isActive={i === activeIndex} muted={muted} setMuted={setMuted} />
       ))}
     </div>
   );
