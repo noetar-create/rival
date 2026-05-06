@@ -1,0 +1,4 @@
+node_modules
+.next
+rival.db-shm
+rival.db-wal
