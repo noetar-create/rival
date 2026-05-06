@@ -49,6 +49,7 @@ function VideoSlide({ video, isActive }: VideoSlideProps) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(video.likes);
   const [bookmarked, setBookmarked] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [toast, setToast] = useState('');
 
   const allHashtags = extractHashtags(video.hashtags || video.description);
@@ -58,11 +59,17 @@ function VideoSlide({ video, isActive }: VideoSlideProps) {
     const v = videoRef.current;
     if (!v) return;
     if (isActive) {
+      v.muted = true;
       v.play().catch(() => {});
     } else {
       v.pause();
+      setMuted(true);
     }
   }, [isActive]);
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = muted;
+  }, [muted]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -111,7 +118,9 @@ function VideoSlide({ video, isActive }: VideoSlideProps) {
   };
 
   return (
-    <div className="relative w-full h-screen snap-start snap-always flex-shrink-0 overflow-hidden bg-black">
+    <div className="relative w-full h-screen snap-start snap-always flex-shrink-0 bg-black flex items-center justify-center overflow-hidden">
+      {/* Constrained video card — TikTok width */}
+      <div className="relative h-full w-full max-w-[430px] overflow-hidden">
       {/* Video or gradient background */}
       {video.file_url ? (
         <video
@@ -121,6 +130,7 @@ function VideoSlide({ video, isActive }: VideoSlideProps) {
           loop
           muted
           playsInline
+          onClick={() => setMuted(m => !m)}
         />
       ) : (
         <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center`}>
@@ -204,12 +214,26 @@ function VideoSlide({ video, isActive }: VideoSlideProps) {
         </button>
       </div>
 
+      {/* Unmute button */}
+      {video.file_url && muted && (
+        <button
+          onClick={() => setMuted(false)}
+          className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full z-10 hover:bg-black/80 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          </svg>
+          Tap for sound
+        </button>
+      )}
+
       {/* Toast */}
       {toast && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-white/90 text-black text-sm font-semibold px-4 py-2 rounded-full shadow-lg z-10 animate-fade-in">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-white/90 text-black text-sm font-semibold px-4 py-2 rounded-full shadow-lg z-10">
           {toast}
         </div>
       )}
+      </div>
     </div>
   );
 }
