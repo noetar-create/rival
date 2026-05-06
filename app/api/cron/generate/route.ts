@@ -10,13 +10,21 @@ import { createVideo, awardVerifiedBadgesToTopThree } from '@/lib/db';
 const execFileAsync = promisify(execFile);
 
 const NICHES = [
-  { name: 'psychology', prompt: 'Write a compelling 60-second video script about an interesting psychology fact or human behavior insight. Make it shocking or surprising. Start with a hook. No intro, just dive in. Max 120 words. Also pick a 2-3 word keyword for cinematic stock footage that fits the mood (e.g. "crowded street", "dark corridor", "person thinking").' },
-  { name: 'true_crime', prompt: 'Write a compelling 60-second video script about a fascinating true crime case or mystery. Keep it factual but gripping. Start with a hook. Max 120 words. Also pick a 2-3 word keyword for dark cinematic stock footage (e.g. "dark alley", "police lights", "abandoned building").' },
-  { name: 'relationships', prompt: 'Write a compelling 60-second video script with relationship advice or a surprising relationship fact. Make it relatable. Start with a hook. Max 120 words. Also pick a 2-3 word keyword for cinematic stock footage (e.g. "couple sunset", "city night", "walking together").' },
-  { name: 'finance', prompt: 'Write a compelling 60-second video script about a money tip, financial fact, or wealth-building insight most people don\'t know. Start with a hook. Max 120 words. Also pick a 2-3 word keyword for stock footage (e.g. "city skyline", "luxury car", "busy office").' },
-  { name: 'motivation', prompt: 'Write a compelling 60-second motivational video script that feels raw and real, not cheesy. A mindset shift or brutal truth. Start with a hook. Max 120 words. Also pick a 2-3 word keyword for powerful cinematic footage (e.g. "mountain sunrise", "running athlete", "ocean waves").' },
-  { name: 'health', prompt: 'Write a compelling 60-second video script about a surprising health or wellness fact most people get wrong. Start with a hook. Max 120 words. Also pick a 2-3 word keyword for stock footage (e.g. "nature forest", "healthy food", "yoga meditation").' },
-  { name: 'history', prompt: 'Write a compelling 60-second video script about a wild or little-known historical fact or event. Start with a hook. Max 120 words. Also pick a 2-3 word keyword for cinematic stock footage (e.g. "ancient ruins", "vintage city", "old architecture").' },
+  { name: 'psychology', prompt: 'Write a viral TikTok-style 60-second voiceover script about a shocking psychology or dark human behavior fact. Hook in the first sentence. Use "you"/"your". Punchy, no filler. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'true_crime', prompt: 'Write a viral TikTok-style 60-second voiceover script about a gripping true crime case or unsolved mystery. Start with the most shocking detail. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'relationships', prompt: 'Write a viral TikTok-style 60-second voiceover script about a surprising relationship or dating truth that stops people mid-scroll. Speak directly to the viewer. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'finance', prompt: 'Write a viral TikTok-style 60-second voiceover script about a money secret or wealth truth most people never learn. Make it feel urgent. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'motivation', prompt: 'Write a viral TikTok-style 60-second voiceover script — raw, no-BS mindset shift or hard truth about success or discipline. No clichés. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'health', prompt: 'Write a viral TikTok-style 60-second voiceover script about a health or body fact most people have completely backwards. Make it feel like forbidden knowledge. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'history', prompt: 'Write a viral TikTok-style 60-second voiceover script about a wild, dark, or little-known historical event. Start with the most insane detail. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'comedy', prompt: 'Write a viral TikTok-style 60-second voiceover script that is genuinely funny — absurd observations, "nobody talks about this" moments, or hilariously true facts about everyday life. Dry humor, fast pace. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'science', prompt: 'Write a viral TikTok-style 60-second voiceover script about a mind-blowing science or space fact that makes people question reality. Start with something that sounds impossible. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'mystery', prompt: 'Write a viral TikTok-style 60-second voiceover script about a real unsolved mystery, strange phenomenon, or conspiracy that turned out to be true. Build suspense. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'horror', prompt: 'Write a viral TikTok-style 60-second voiceover script about a creepy real event, psychological horror fact, or terrifying true story. Build dread slowly. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'life_hacks', prompt: 'Write a viral TikTok-style 60-second voiceover script with life hacks or tips that feel almost illegal they are so useful — things people wish someone told them years ago. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'fitness', prompt: 'Write a viral TikTok-style 60-second voiceover script about a fitness or body truth that most gym-goers get completely wrong. Confident and direct. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'food', prompt: 'Write a viral TikTok-style 60-second voiceover script about a shocking food fact or dangerous ingredient that will change how someone thinks about what they eat. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
+  { name: 'self_improvement', prompt: 'Write a viral TikTok-style 60-second voiceover script about a stoicism or self-improvement insight that actually changes behavior — specific, not generic. Max 120 words. Return JSON: {"title":"...","script":"...","keyword":"2-3 word pexels search"}' },
 ];
 
 const VOICES = [
@@ -44,7 +52,7 @@ async function generateScript(niche: typeof NICHES[0]): Promise<{ title: string;
     max_tokens: 400,
     messages: [{
       role: 'user',
-      content: `${niche.prompt}\n\nReturn JSON only: {"title": "catchy title max 8 words", "script": "the voiceover script", "keyword": "2-3 word pexels search term"}`
+      content: `${niche.prompt}\n\nIMPORTANT: Return raw JSON only, no markdown, no explanation.`
     }]
   });
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
