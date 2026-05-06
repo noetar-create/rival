@@ -24,8 +24,10 @@ export async function POST(req: NextRequest) {
     results.uploads = `Error: ${e}`;
   }
 
-  // Delete WAL and SHM files to allow SQLite to recover
-  for (const [name, fp] of [['wal', walPath], ['shm', shmPath]] as const) {
+  // Delete WAL, SHM, and optionally the main DB (if corrupt) to allow SQLite to recover
+  const dbPath = path.join(dataPath, 'rival.db');
+  const dbFiles: [string, string][] = [['wal', walPath], ['shm', shmPath], ['db', dbPath]];
+  for (const [name, fp] of dbFiles) {
     if (existsSync(fp)) {
       try { await unlink(fp); results[name] = 'Deleted'; }
       catch (e) { results[name] = `Error: ${e}`; }

@@ -8,27 +8,36 @@ let db: Database.Database;
 
 function getDb(): Database.Database {
   if (!db) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { unlinkSync, existsSync } = require('fs') as typeof import('fs');
+    const side = [DB_PATH + '-wal', DB_PATH + '-shm'];
+
+    // Attempt 1: normal open
     try {
       db = new Database(DB_PATH);
       db.pragma('journal_mode = WAL');
       db.pragma('foreign_keys = ON');
       initSchema();
-    } catch {
-      // WAL/SHM may be corrupted from a previous full-disk event — delete and retry
-      try {
-        const { unlinkSync, existsSync } = require('fs') as typeof import('fs');
-        const walPath = DB_PATH + '-wal';
-        const shmPath = DB_PATH + '-shm';
-        if (existsSync(walPath)) unlinkSync(walPath);
-        if (existsSync(shmPath)) unlinkSync(shmPath);
-        db = new Database(DB_PATH);
-        db.pragma('journal_mode = WAL');
-        db.pragma('foreign_keys = ON');
-        initSchema();
-      } catch (e2) {
-        throw e2;
-      }
-    }
+      return db;
+    } catch { /* fall through */ }
+
+    // Attempt 2: delete WAL/SHM (corrupted from full-disk), retry
+    side.forEach(f => { if (existsSync(f)) try { unlinkSync(f); } catch { /* ignore */ } });
+    try {
+      db = new Database(DB_PATH);
+      db.pragma('journal_mode = WAL');
+      db.pragma('foreign_keys = ON');
+      initSchema();
+      return db;
+    } catch { /* fall through */ }
+
+    // Attempt 3: main DB file is corrupt — delete it and start fresh
+    side.forEach(f => { if (existsSync(f)) try { unlinkSync(f); } catch { /* ignore */ } });
+    if (existsSync(DB_PATH)) try { unlinkSync(DB_PATH); } catch { /* ignore */ }
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    initSchema();
   }
   return db;
 }
